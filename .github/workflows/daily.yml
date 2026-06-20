@@ -1,0 +1,59 @@
+name: Daily Riddle Short
+
+# Runs once a day AND on-demand from the Actions tab.
+# NOTE: cron is UTC and GitHub may delay it by several minutes. Adjust the time.
+on:
+  schedule:
+    - cron: "0 14 * * *"     # 14:00 UTC daily — change to your slot
+  workflow_dispatch: {}       # manual "Run workflow" button
+
+# allow the job to commit the updated workbook (posted state) back
+permissions:
+  contents: write
+
+concurrency:
+  group: daily-riddle
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      RIDDLE_ROOT: ${{ github.workspace }}   # tells scripts the repo root holds the data
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install ffmpeg + DejaVu fonts
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y ffmpeg fonts-dejavu-core
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Python deps
+        run: pip install -r requirements.txt
+
+      - name: Restore Google credentials from secrets
+        run: |
+          printf '%s' '${{ secrets.YT_CLIENT_SECRET_JSON }}' > client_secret.json
+          printf '%s' '${{ secrets.YT_TOKEN_JSON }}' > token.json
+
+      - name: Build next video
+        run: python3 pipeline.py
+
+      - name: Upload to YouTube (private) + notify
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          YT_PRIVACY: private          # change to "public" only after audit passes
+        run: python3 upload_youtube.py
+
+      - name: Commit updated workbook (posted state)
+        run: |
+          git config user.name "riddle-bot"
+          git config user.email "bot@users.noreply.github.com"
+          git add Riddle_Content_Bank.xlsx
+          git commit -m "chore: mark riddle posted [skip ci]" || echo "nothing to commit"
+          git push || echo "push skipped"
