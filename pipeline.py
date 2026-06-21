@@ -98,7 +98,7 @@ def build_next(do_audio=True):
     render_video.render(nxt["riddle"], nxt["answer"], seed, silent)
     final = silent
     if do_audio:
-        r = subprocess.run([sys.executable, f"{SCRIPT_DIR}/add_audio.py", silent, "5", "15"],
+        r = subprocess.run([sys.executable, f"{SCRIPT_DIR}/add_audio.py", silent, "7", "17"],
                            capture_output=True, text=True)
         if r.returncode != 0:
             print("AUDIO STEP FAILED:\n", r.stderr[-800:])

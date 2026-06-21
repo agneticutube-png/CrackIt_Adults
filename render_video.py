@@ -12,7 +12,8 @@ Public API:
     build_theme(seed, kind="adult") -> dict   (inspect a variant without rendering)
 
 Locked format (do not change without product reason):
-    1080x1920 vertical, 18s total, 10s countdown ring, 3s answer flash, loop hook.
+    1080x1920 vertical, 20s total: 2s hook, ~5s read, 10s countdown ring
+    (7s->17s), 3s answer flash, loop hook.
 
 CLI (for local testing):
     python3 render_video.py <seed> ["riddle text" "answer"]
@@ -22,7 +23,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 # ---------- locked config ----------
 W, H = 1080, 1920
-DUR = 18.0
+DUR = 20.0
 
 FD = "/usr/share/fonts/truetype/dejavu"
 def _font(name, size): return ImageFont.truetype(os.path.join(FD, name), size)
@@ -201,8 +202,8 @@ def render(riddle, answer, seed, out_path, kind="adult", fps=30):
                    wa, font=wf, fill=(GOLD[0], GOLD[1], GOLD[2], wa_a))
 
         cx, cy, R = W // 2, 1230, 150
-        if 5.0 <= t < 15.0:
-            remain = 15.0 - t; secs = int(math.ceil(remain)); frac = remain / 10.0
+        if 7.0 <= t < 17.0:
+            remain = 17.0 - t; secs = int(math.ceil(remain)); frac = remain / 10.0
             if theme["ring"] == "ticks":
                 for k in range(60):
                     ang = math.radians(k * 6 - 90); big = (k % 5 == 0)
@@ -223,12 +224,12 @@ def render(riddle, answer, seed, out_path, kind="adult", fps=30):
             spaced(d, tip, tf, cx - spaced_w(d, tip, tf, 6) / 2, cy + R + 36,
                    (DIM[0], DIM[1], DIM[2], 255), 6)
             cf = SANS_B(40); c1 = "Follow for a new riddle every day"
-            cta_a = int(255 * smooth((t - 5.0) / 0.8))
+            cta_a = int(255 * smooth((t - 7.0) / 0.8))
             d.text(((W - d.textlength(c1, font=cf)) / 2, 1740),
                    c1, font=cf, fill=(GOLD[0], GOLD[1], GOLD[2], cta_a))
 
-        if t >= 15.0:
-            p = smooth((t - 15.0) / 0.45)
+        if t >= 17.0:
+            p = smooth((t - 17.0) / 0.45)
             cardw, cardh = int(W - 200), int(560 * (0.8 + 0.2 * p)); cx0, cy0 = 100, 1010
             d.rounded_rectangle([cx0, cy0, cx0 + cardw, cy0 + cardh], radius=40,
                                 fill=(248, 245, 238, int(240 * p)),
