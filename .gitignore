@@ -2,5 +2,9 @@ client_secret.json
 token.json
 next_video.json
 Videos/
+.venv/
+venv/
 __pycache__/
 *.pyc
+.DS_Store
+.~lock.*#

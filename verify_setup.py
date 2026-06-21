@@ -10,14 +10,12 @@ Checks (each independent, never aborts the rest):
   1. ffmpeg + DejaVu fonts present
   2. workbook readable + how many adult riddles remain unposted
   3. Google/YouTube auth works (prints the channel it will post to)
-  4. Telegram works (sends you a real test message)
 Exit code 0 = all green, 1 = something needs attention.
 """
 import os, sys, shutil, subprocess
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_ROOT = os.environ.get("RIDDLE_ROOT",
-                           "/sessions/magical-modest-ramanujan/mnt/Youtube")
+DATA_ROOT = os.environ.get("RIDDLE_ROOT", SCRIPT_DIR)
 XLSX = os.environ.get("RIDDLE_XLSX", f"{DATA_ROOT}/Riddle_Content_Bank.xlsx")
 CLIENT_SECRET = os.environ.get("YT_CLIENT_SECRET", f"{SCRIPT_DIR}/client_secret.json")
 TOKEN = os.environ.get("YT_TOKEN", f"{SCRIPT_DIR}/token.json")
@@ -82,18 +80,6 @@ try:
         line(True, "YouTube authorized", f"posts to channel: {title}")
 except Exception as e:
     line(False, "YouTube auth", repr(e))
-
-# 4. Telegram
-print("\n4) Telegram notification")
-try:
-    if not (os.environ.get("TELEGRAM_BOT_TOKEN") and os.environ.get("TELEGRAM_CHAT_ID")):
-        line(False, "Telegram env vars set", "TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID missing")
-    else:
-        import notify
-        notify.send_telegram("\u2705 Riddle o'Clock setup check — you're wired up.")
-        line(True, "Telegram test message sent", "check your phone")
-except Exception as e:
-    line(False, "Telegram", repr(e))
 
 print("\n" + ("ALL GREEN — safe to run the daily workflow." if ok
               else "Some checks failed — fix the FAILs above before going live."))

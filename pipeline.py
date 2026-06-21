@@ -24,8 +24,7 @@ import metadata
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 # Where data lives. Locally defaults to the workspace folder; on GitHub Actions
 # set RIDDLE_ROOT=. (repo root). XLSX path can be overridden independently.
-DATA_ROOT = os.environ.get("RIDDLE_ROOT",
-                           "/sessions/magical-modest-ramanujan/mnt/Youtube")
+DATA_ROOT = os.environ.get("RIDDLE_ROOT", SCRIPT_DIR)
 XLSX  = os.environ.get("RIDDLE_XLSX", f"{DATA_ROOT}/Riddle_Content_Bank.xlsx")
 OUTDIR = f"{DATA_ROOT}/Videos"
 MANIFEST = f"{DATA_ROOT}/next_video.json"

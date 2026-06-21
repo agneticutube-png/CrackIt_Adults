@@ -43,10 +43,8 @@ jobs:
       - name: Build next video
         run: python3 pipeline.py
 
-      - name: Upload to YouTube (private) + notify
+      - name: Upload to YouTube (private)
         env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           YT_PRIVACY: private          # change to "public" only after audit passes
         run: python3 upload_youtube.py
 

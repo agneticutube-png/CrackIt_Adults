@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Upload the latest pipeline video to YouTube as PRIVATE, then ping you on
-Telegram with a one-tap Studio link to publish.
+Upload the latest pipeline video to YouTube as PRIVATE, then print the Studio
+link to the run log so you can publish it manually.
 
 Why PRIVATE + manual publish: a new (unaudited) API project has its uploads
 force-locked to private by YouTube, and scheduled auto-publish (publishAt) is
@@ -14,7 +14,6 @@ One-time setup (see Adult_Channel_Setup_Kit / implementation plan):
   1. Google Cloud project -> enable "YouTube Data API v3".
   2. OAuth client (Desktop) -> download client_secret.json.
   3. Run authorize.py ONCE locally -> creates token.json (refresh token).
-  4. Set env: TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID.
 For GitHub Actions, store client_secret.json + token.json contents as secrets.
 
 Run:  python3 upload_youtube.py            # uploads manifest video
@@ -23,8 +22,7 @@ Run:  python3 upload_youtube.py            # uploads manifest video
 import os, sys, json
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_ROOT = os.environ.get("RIDDLE_ROOT",
-                           "/sessions/magical-modest-ramanujan/mnt/Youtube")
+DATA_ROOT = os.environ.get("RIDDLE_ROOT", SCRIPT_DIR)
 MANIFEST = f"{DATA_ROOT}/next_video.json"
 XLSX = os.environ.get("RIDDLE_XLSX", f"{DATA_ROOT}/Riddle_Content_Bank.xlsx")
 CLIENT_SECRET = os.environ.get("YT_CLIENT_SECRET", f"{SCRIPT_DIR}/client_secret.json")
@@ -89,18 +87,19 @@ def main():
     url = f"https://youtu.be/{vid}"
     print("UPLOADED:", url)
 
-    # mark posted only AFTER successful upload, then ping
+    # mark posted only AFTER successful upload
     import pipeline
     pipeline.mark_posted(XLSX, manifest["sheet"], manifest["row"],
                          manifest["posted_col"], manifest["link_col"], url)
     print("Marked posted in workbook.")
 
-    try:
-        import notify
-        notify.notify_ready(vid, manifest["title"], manifest["riddle"])
-        print("Telegram notification sent.")
-    except Exception as e:
-        print("WARNING: notification failed:", e)
+    # Manual-publish mode: print the link so it's captured in the run log.
+    studio = f"https://studio.youtube.com/video/{vid}/edit"
+    print("\nREADY TO PUBLISH (manual):")
+    print(f"  Title : {manifest['title']}")
+    print(f"  Studio: {studio}")
+    print(f"  Watch : {url}")
+    print("Open the Studio link, set visibility to Public, and publish.")
 
 if __name__ == "__main__":
     main()

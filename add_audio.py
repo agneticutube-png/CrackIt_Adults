@@ -137,7 +137,7 @@ if __name__ == "__main__":
     cd_start = float(sys.argv[2]) if len(sys.argv) > 2 else 5.0
     cd_end   = float(sys.argv[3]) if len(sys.argv) > 3 else 15.0
     dur = ffprobe_dur(vid)
-    wav = "/sessions/magical-modest-ramanujan/_tick.wav"
+    wav = os.path.splitext(vid)[0] + "_tick.wav"
     save_wav(wav, build_adult(dur, cd_start, cd_end))
     base, ext = os.path.splitext(vid)
     out = base + "_ticking" + ext

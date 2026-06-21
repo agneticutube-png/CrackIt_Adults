@@ -266,5 +266,6 @@ if __name__ == "__main__":
     th = build_theme(seed)
     print(f"seed {seed}: palette={th['palette']['name']} bg={th['bg_style']} "
           f"accent={th['accent']} wm={th['wm_pos']} ring={th['ring']} kicker={th['kicker']!r}")
-    out = render(r, a, seed, f"/sessions/magical-modest-ramanujan/mnt/Youtube/Videos/VARTEST_{seed}.mp4")
+    out = render(r, a, seed, os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                          "Videos", f"VARTEST_{seed}.mp4"))
     print("SAVED:", out)
