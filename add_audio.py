@@ -2,12 +2,10 @@
 """
 Audio layer for riddle Shorts (stage 2 of pipeline).
 
-ADULT: silent until the countdown, then a CINEMATIC countdown in the spirit of
-the Interstellar "Mountains" ticking pulse -- each second lands as the SAME
-deep, reverberant sub-boom with an organ body, over a steady low drone, and a
-grand resolve at the answer reveal. Every beat across the count is identical
-(no crescendo, no final-beat shimmer). 100% synthesized -> never Content-ID
-claimable.
+ADULT: silent until the countdown, then a HEARTBEAT countdown -- one organic
+lub-dub per second across the countdown window, nothing else (no drone bed,
+no reveal chord). Every beat is identical. 100% synthesized -> never
+Content-ID claimable.
 
 Usage: python3 add_audio.py <input_video.mp4> [countdown_start=5] [countdown_end=15]
 Output: <input>_ticking.mp4
@@ -25,46 +23,27 @@ def _adsr(n, attack, tau):
     e[:a] *= np.linspace(0, 1, a)
     return e
 
-def beat(amp=0.55, shimmer=0.0):
-    """One deep cinematic pulse: pitch-dropping sub + organ body + transient."""
-    dur = 0.9
+def thump(f0, f1, amp, dur):
+    """One heart thud: downward pitch-swept sine + a touch of mid body so the
+    rhythm still reads on small phone speakers."""
     n = int(dur * SR)
     t = np.arange(n) / SR
-    # sub boom with downward pitch sweep (90 -> 52 Hz)
-    f = 52 + (90 - 52) * np.exp(-t / 0.10)
-    phase = 2 * np.pi * np.cumsum(f) / SR
-    sub = np.sin(phase) * _adsr(n, 0.004, 0.38)
-    # organ body: open-fifth stack on A (royal, not sweet)
-    body = (np.sin(2*np.pi*110*t) + 0.7*np.sin(2*np.pi*164.81*t)
-            + 0.5*np.sin(2*np.pi*220*t) + 0.25*np.sin(2*np.pi*329.6*t))
-    body *= 0.32 * _adsr(n, 0.006, 0.24)
-    # transient articulation (the "tock" definition)
-    click = np.sin(2*np.pi*2300*t) * _adsr(n, 0.0005, 0.010) * 0.18
-    sig = (sub + body + click) * amp
-    if shimmer > 0:  # dread: high octaves bloom on final beats
-        sh = (np.sin(2*np.pi*880*t) + 0.6*np.sin(2*np.pi*1318.5*t))
-        sig += sh * _adsr(n, 0.02, 0.5) * shimmer
-    return sig
+    f = f1 + (f0 - f1) * np.exp(-t / 0.05)
+    ph = 2 * np.pi * np.cumsum(f) / SR
+    sub = np.sin(ph) * _adsr(n, 0.004, 0.10)
+    body = np.sin(2*np.pi*150*t) * _adsr(n, 0.002, 0.045) * 0.25
+    return (sub + body) * amp
 
-def drone(n_samples, a0=0.10, a1=0.85):
-    """Low swelling pad under the countdown (A1 root + fifth + octave)."""
-    t = np.arange(n_samples) / SR
-    pad = (np.sin(2*np.pi*55*t) + 0.6*np.sin(2*np.pi*82.4*t)
-           + 0.4*np.sin(2*np.pi*110*t))
-    # slow tremolo for movement + escalating swell
-    trem = 1 + 0.10 * np.sin(2*np.pi*0.7*t)
-    ramp = np.linspace(a0, a1, n_samples) ** 1.4
-    return pad * trem * ramp * 0.16
-
-def resolve_chord(amp=0.34):
-    """Grand reverberant resolve when the answer appears (A minor, brightened)."""
-    dur = 2.4
-    n = int(dur * SR)
-    t = np.arange(n) / SR
-    chord = (np.sin(2*np.pi*110*t) + 0.7*np.sin(2*np.pi*164.81*t)
-             + 0.6*np.sin(2*np.pi*261.63*t) + 0.4*np.sin(2*np.pi*329.6*t)
-             + 0.25*np.sin(2*np.pi*523.25*t))
-    return chord * _adsr(n, 0.01, 0.9) * amp
+def heartbeat(amp=0.7):
+    """One beat = lub (S1, low+strong) then dub (S2, softer+higher) ~0.17s later."""
+    lub = thump(85, 46, amp, 0.20)
+    dub = thump(98, 55, amp * 0.62, 0.16)
+    gap = int(0.17 * SR)
+    n = gap + len(dub)
+    out = np.zeros(n)
+    out[:len(lub)] += lub
+    out[gap:gap+len(dub)] += dub
+    return out
 
 # ---------- convolution reverb (FFT) ----------
 def make_ir(decay=0.55, length=1.7, seed=0):
@@ -83,34 +62,21 @@ def conv(x, ir):
 
 # ---------- build adult track (stereo) ----------
 def build_adult(dur, cd_start, cd_end):
+    """Heartbeat countdown only: silence, then one lub-dub per second across the
+    countdown window. No drone bed, no reveal chord."""
     total = int(dur * SR)
     dry = np.zeros(total)
     secs = int(round(cd_end - cd_start))           # 10 beats
 
     for i in range(secs):
-        # identical pulse on every second of the countdown (no crescendo, no
-        # shimmer on the final beats) so the whole count feels uniform.
-        b = beat(amp=0.6, shimmer=0.0)
+        hb = heartbeat(amp=0.7)
         pos = int((cd_start + i) * SR)
-        end = min(pos + len(b), total)
-        dry[pos:end] += b[:end - pos]
+        end = min(pos + len(hb), total)
+        dry[pos:end] += hb[:end - pos]
 
-    # steady drone bed across the countdown (constant level, not swelling)
-    n_cd = int((cd_end - cd_start) * SR)
-    dr = drone(n_cd, a0=0.6, a1=0.6)
-    p0 = int(cd_start * SR)
-    end = min(p0 + n_cd, total)
-    dry[p0:end] += dr[:end - p0]
-
-    # grand resolve at the reveal
-    rc = resolve_chord()
-    pr = int(cd_end * SR)
-    end = min(pr + len(rc), total)
-    dry[pr:end] += rc[:end - pr]
-
-    # stereo via two slightly different reverb IRs (width + cinematic space)
+    # subtle stereo room so the thuds aren't bone dry (kept light)
     irL, irR = make_ir(seed=1), make_ir(seed=2)
-    wet = 0.42
+    wet = 0.18
     L = dry + wet * conv(dry, irL)
     R = dry + wet * conv(dry, irR)
 
