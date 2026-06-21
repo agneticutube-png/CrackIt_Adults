@@ -23,31 +23,38 @@ def _adsr(n, attack, tau):
     e[:a] *= np.linspace(0, 1, a)
     return e
 
-def thump(f0, f1, amp, dur):
-    """One heart thud: downward pitch-swept sine + a touch of mid body so the
-    rhythm still reads on small phone speakers."""
-    n = int(dur * SR)
-    t = np.arange(n) / SR
-    f = f1 + (f0 - f1) * np.exp(-t / 0.05)
-    ph = 2 * np.pi * np.cumsum(f) / SR
-    sub = np.sin(ph) * _adsr(n, 0.004, 0.10)
-    body = np.sin(2*np.pi*150*t) * _adsr(n, 0.002, 0.045) * 0.25
-    out = (sub + body) * amp
-    # smooth the tail to true zero so each thud ends cleanly (no click/buzz)
-    f = min(int(0.04 * SR), n)
-    if f > 0:
-        out[-f:] *= np.cos(np.linspace(0, np.pi / 2, f)) ** 2
+def _lp(x, cutoff):
+    """Gentle low-pass (Hann moving average): turns white noise into a soft,
+    muffled 'thud' texture rather than hiss."""
+    klen = max(4, int(SR / cutoff))
+    win = np.hanning(klen); win = win / win.sum()
+    return np.convolve(x, win, mode="same")
+
+def thud(amp, dur, f0, f1, noise_amt, attack=0.006):
+    """One organic heart thud: a low body tone (fast downward drop) + a short
+    low-passed noise burst for the fleshy 'thud', under a soft envelope. The
+    noise is what makes it read as a real heart and not an electronic blip."""
+    n = int(dur * SR); t = np.arange(n) / SR
+    f = f1 + (f0 - f1) * np.exp(-t / 0.035)
+    body = np.sin(2 * np.pi * np.cumsum(f) / SR)
+    rng = np.random.default_rng(int(f0 * 1000))      # deterministic per thud
+    texture = _lp(rng.standard_normal(n), 220)
+    env = _adsr(n, attack, 0.07)
+    out = (body + noise_amt * texture) * env * amp
+    fz = min(int(0.03 * SR), n)                       # tail to true zero
+    out[-fz:] *= np.cos(np.linspace(0, np.pi / 2, fz)) ** 2
     return out
 
-def heartbeat(amp=0.7):
-    """One beat = lub (S1, low+strong) then dub (S2, softer+higher) ~0.17s later."""
-    lub = thump(85, 46, amp, 0.20)
-    dub = thump(98, 55, amp * 0.62, 0.16)
-    gap = int(0.17 * SR)
+def heartbeat(amp=0.8):
+    """Realistic 'lub-DUB': S1 (lub, lower/stronger) then S2 (dub, higher/softer)
+    ~0.26s later, then the rest of the second is silence -> ~60 bpm resting."""
+    lub = thud(amp,        0.16, 70, 44, 0.30)
+    dub = thud(amp * 0.62, 0.13, 82, 52, 0.25)
+    gap = int(0.26 * SR)
     n = gap + len(dub)
     out = np.zeros(n)
     out[:len(lub)] += lub
-    out[gap:gap+len(dub)] += dub
+    out[gap:gap + len(dub)] += dub
     return out
 
 # ---------- convolution reverb (FFT) ----------
