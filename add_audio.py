@@ -32,7 +32,12 @@ def thump(f0, f1, amp, dur):
     ph = 2 * np.pi * np.cumsum(f) / SR
     sub = np.sin(ph) * _adsr(n, 0.004, 0.10)
     body = np.sin(2*np.pi*150*t) * _adsr(n, 0.002, 0.045) * 0.25
-    return (sub + body) * amp
+    out = (sub + body) * amp
+    # smooth the tail to true zero so each thud ends cleanly (no click/buzz)
+    f = min(int(0.04 * SR), n)
+    if f > 0:
+        out[-f:] *= np.cos(np.linspace(0, np.pi / 2, f)) ** 2
+    return out
 
 def heartbeat(amp=0.7):
     """One beat = lub (S1, low+strong) then dub (S2, softer+higher) ~0.17s later."""
@@ -74,13 +79,9 @@ def build_adult(dur, cd_start, cd_end):
         end = min(pos + len(hb), total)
         dry[pos:end] += hb[:end - pos]
 
-    # subtle stereo room so the thuds aren't bone dry (kept light)
-    irL, irR = make_ir(seed=1), make_ir(seed=2)
-    wet = 0.18
-    L = dry + wet * conv(dry, irL)
-    R = dry + wet * conv(dry, irR)
-
-    st = np.column_stack([L, R])
+    # NO convolution reverb: the white-noise impulse response left an audible
+    # noisy wash after every beat. A heartbeat reads best fully dry.
+    st = np.column_stack([dry, dry])
     peak = np.max(np.abs(st)) or 1.0
     st = st / peak * 0.85
     ft = int(0.5 * SR)                              # tail fade
