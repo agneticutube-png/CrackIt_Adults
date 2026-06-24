@@ -13,7 +13,10 @@ Public API:
 
 Locked format (do not change without product reason):
     1080x1920 vertical, 20s total: 2s hook, ~5s read, 10s countdown ring
-    (7s->17s), 3s answer flash, loop hook.
+    (7s->17s), answer reveal (17s), then a seamless-loop outro that fades all
+    content back out so the final frame == frame 0 (bg + kicker only). This
+    makes YouTube's auto-loop cut invisible and pulls viewers back into the
+    hook instead of swiping away at the answer reveal.
 
 CLI (for local testing):
     python3 render_video.py <seed> ["riddle text" "answer"]
@@ -60,10 +63,13 @@ RING_STYLES = ["solid", "ticks"]
 KICKERS     = ["DAILY RIDDLE", "RIDDLE O'CLOCK", "BRAIN TEASER", "CAN YOU SOLVE IT?"]
 HOOKS = [
     (["Can you", "solve this?"], "Most people get it wrong"),
-    (["Only 1 in 10", "get this right"], "Beat the clock"),
+    (["There's a", "hidden twist"], "The answer isn't what you think"),
     (["Think you're", "sharp enough?"], "Prove it before time runs out"),
     (["A riddle", "for the bold"], "How fast can you crack it?"),
 ]
+# On-screen prompt shown under the timer. Rotated per video for variety AND to
+# turn silent views into comment engagement. No fabricated stats by design.
+TIPS = ["THINK...", "COMMENT YOUR GUESS", "GOT IT? COMMENT IT", "PAUSE & GUESS"]
 
 def _h(seed, salt):
     return int(hashlib.sha256(f"{seed}:{salt}".encode()).hexdigest(), 16)
@@ -81,6 +87,7 @@ def build_theme(seed, kind="adult"):
         "ring":     RING_STYLES[_h(seed, "rg") % len(RING_STYLES)],
         "kicker":   KICKERS[_h(seed, "ki") % len(KICKERS)],
         "hook":     HOOKS[_h(seed, "hk") % len(HOOKS)],
+        "tip":      TIPS[_h(seed, "tip") % len(TIPS)],
         "q_cy":     520 + (_h(seed, "qy") % 90),
         "week":     week,
     }
@@ -177,9 +184,15 @@ def render(riddle, answer, seed, out_path, kind="adult", fps=30):
     BG = base_bg(theme); riddle_font = SERIF_B(64)
     rlines = wrap(ImageDraw.Draw(BG.copy()), riddle, riddle_font, W - 230)
     hook_lines, hook_sub = theme["hook"]; q_cy = theme["q_cy"]
+    HOLD = {"f0": None}  # cached frame 0, filled after frame() is defined
 
     def frame(i):
         t = i / fps; img = BG.copy(); d = ImageDraw.Draw(img, "RGBA")
+        # Rec 2 (seamless loop): in the final second, fade ALL content (riddle +
+        # answer card) back out so the last frame matches frame 0 (bg + kicker
+        # only, hook still at alpha 0). The YouTube auto-loop then has no visible
+        # cut, so viewers fall back into the hook instead of swiping at reveal.
+        outro = 1.0 - smooth((t - 19.0) / 1.0) if t >= 19.0 else 1.0
         kf = SANS_B(34); kick = theme["kicker"]; kw = spaced_w(d, kick, kf, 10)
         bx0 = (W - (kw + 84)) / 2
         d.rounded_rectangle([bx0, 150, bx0 + kw + 84, 226], radius=38,
@@ -220,7 +233,7 @@ def render(riddle, answer, seed, out_path, kind="adult", fps=30):
             nf = SERIF_B(150); ns = str(secs); bb = d.textbbox((0, 0), ns, font=nf)
             d.text((cx - (bb[2] - bb[0]) / 2 - bb[0], cy - (bb[3] - bb[1]) / 2 - bb[1]),
                    ns, font=nf, fill=(CREAM[0], CREAM[1], CREAM[2], 255))
-            tf = SANS_B(30); tip = "THINK..."
+            tf = SANS_B(30); tip = theme["tip"]
             spaced(d, tip, tf, cx - spaced_w(d, tip, tf, 6) / 2, cy + R + 36,
                    (DIM[0], DIM[1], DIM[2], 255), 6)
             cf = SANS_B(40); c1 = "Follow for a new riddle every day"
@@ -240,10 +253,16 @@ def render(riddle, answer, seed, out_path, kind="adult", fps=30):
             af = SERIF_B(86); alines = wrap(d, str(answer), af, cardw - 120)
             draw_block(d, alines, af, cy0 + cardh / 2 + 30, (24, 28, 56, int(255 * p)), lh=1.2)
 
-        if t > DUR - 0.4:
-            fade = int(200 * smooth((t - (DUR - 0.4)) / 0.4))
-            img = Image.alpha_composite(img, Image.new("RGBA", (W, H), (TOP[0], TOP[1], TOP[2], fade)))
+        # Rec 2 (seamless loop): PIL ignores per-fill alpha on this draw surface,
+        # so fade-out must be done by pixel blending whole frames. In the final
+        # second, cross-dissolve toward a cached copy of frame 0 (the hook frame)
+        # so the last frame == the first frame. YouTube's auto-loop cut is then
+        # invisible and the dissolve re-presents the hook to pull viewers back in.
+        if t >= 19.0 and HOLD["f0"] is not None:
+            img = Image.blend(img, HOLD["f0"], 1.0 - outro)
         return img
+
+    HOLD["f0"] = frame(0)  # cache frame 0 (hook frame) as the loop target
 
     for i in range(nframes):
         frame(i).convert("RGB").save(os.path.join(framedir, f"f_{i:05d}.png"))
