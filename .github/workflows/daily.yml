@@ -4,7 +4,8 @@ name: Daily Riddle Short
 # NOTE: cron is UTC and GitHub may delay it by several minutes. Adjust the time.
 on:
   schedule:
-    - cron: "30 7 * * *"     # 07:30 UTC = 1:00 PM IST daily
+    - cron: "30 23 * * *"    # 23:30 UTC = 5:00 AM IST daily
+    
   workflow_dispatch: {}       # manual "Run workflow" button
 
 # allow the job to commit the updated workbook (posted state) back
