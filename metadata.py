@@ -50,9 +50,6 @@ SEARCH_KEYWORDS = [
     "Riddles with Answers",              # ~18.9k/mo
     "Tricky Riddles",                    # ~15.3k/mo
     "Brain Teasers with Answers",        # ~12.2k/mo
-    "Riddles in English with Answers",   # ~4.9k/mo (your manual pick)
-    "Mystery Riddles",                   # ~4.1k/mo (India)
-    "Riddles That Will Blow Your Mind",  # ~4.2k/mo
 ]
 
 def _pick(lst, seed, salt):
@@ -60,13 +57,10 @@ def _pick(lst, seed, salt):
     return lst[i]
 
 def generate(riddle, answer, seed, category=None, video_url=None):
-    title_core = _pick(TITLE_PATTERNS, seed, "title")
-    kw = _pick(SEARCH_KEYWORDS, seed, "kw")
-    full = f"{title_core} | {kw} | {CHANNEL} #shorts"
-    base = f"{title_core} | {CHANNEL} #shorts"
-    title = full if len(full) <= 100 else base
+    title_core = _pick(TITLE_PATTERNS, seed, "title")   # kept for description use only
+    title = f"{' | '.join(SEARCH_KEYWORDS[:3])} | {CHANNEL} #shorts"   # 91 chars, fixed
     if len(title) > 100:
-        title = title[:97].rstrip() + "..."
+        title = title[:97].rstrip() + "..."    
 
     opener = _pick(OPENERS, seed, "open")
     cat_tag = (category or "").strip().lower()
