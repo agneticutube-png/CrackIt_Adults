@@ -48,7 +48,7 @@ def _pick(lst, seed, salt):
 
 def generate(riddle, answer, seed, category=None, video_url=None):
     title_core = _pick(TITLE_PATTERNS, seed, "title")
-    title = f"{title_core} | {CHANNEL} #shorts"
+    title = f"{title_core} | Riddles in English with Answers | {CHANNEL} #shorts"
     if len(title) > 100:
         title = title[:97].rstrip() + "..."
 
