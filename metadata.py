@@ -42,13 +42,29 @@ BASE_TAGS = [
 
 BASE_HASHTAGS = ["#shorts", "#riddle", "#brainteaser", "#puzzle", "#quiz"]
 
+# Vetted, on-niche search phrases (ranked by real vidiq search volume, India + global).
+# Rotated into the title to lift search indexing. Refresh ~quarterly in Cowork via
+# vidiq_keyword_research — keep ONLY high/medium-volume phrases that literally describe
+# this channel's content. No brand names, no "for kids", no false claims.
+SEARCH_KEYWORDS = [
+    "Riddles with Answers",              # ~18.9k/mo
+    "Tricky Riddles",                    # ~15.3k/mo
+    "Brain Teasers with Answers",        # ~12.2k/mo
+    "Riddles in English with Answers",   # ~4.9k/mo (your manual pick)
+    "Mystery Riddles",                   # ~4.1k/mo (India)
+    "Riddles That Will Blow Your Mind",  # ~4.2k/mo
+]
+
 def _pick(lst, seed, salt):
     i = int(hashlib.sha256(f"{seed}:{salt}".encode()).hexdigest(), 16) % len(lst)
     return lst[i]
 
 def generate(riddle, answer, seed, category=None, video_url=None):
     title_core = _pick(TITLE_PATTERNS, seed, "title")
-    title = f"{title_core} | Riddles in English with Answers | {CHANNEL} #shorts"
+    kw = _pick(SEARCH_KEYWORDS, seed, "kw")
+    full = f"{title_core} | {kw} | {CHANNEL} #shorts"
+    base = f"{title_core} | {CHANNEL} #shorts"
+    title = full if len(full) <= 100 else base
     if len(title) > 100:
         title = title[:97].rstrip() + "..."
 
