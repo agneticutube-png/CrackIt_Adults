@@ -69,7 +69,7 @@ HOOKS = [
 ]
 # On-screen prompt shown under the timer. Rotated per video for variety AND to
 # turn silent views into comment engagement. No fabricated stats by design.
-TIPS = ["THINK...", "COMMENT YOUR GUESS", "GOT IT? COMMENT IT", "PAUSE & GUESS"]
+TIPS = ["COMMENT YOUR TIME", "GOT IT IN 10s? COMMENT", "CRACKED IT? COMMENT", "SOLVED IT? COMMENT YOUR TIME"]
 
 def _h(seed, salt):
     return int(hashlib.sha256(f"{seed}:{salt}".encode()).hexdigest(), 16)
