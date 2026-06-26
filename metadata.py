@@ -57,10 +57,28 @@ def _pick(lst, seed, salt):
     return lst[i]
 
 def generate(riddle, answer, seed, category=None, video_url=None):
-    title_core = _pick(TITLE_PATTERNS, seed, "title")   # kept for description use only
-    title = f"{' | '.join(SEARCH_KEYWORDS[:3])} | {CHANNEL} #shorts"   # 91 chars, fixed
+    title_core = _pick(TITLE_PATTERNS, seed, "title")   # the distinctive hook
+
+    # Title A/B test (deterministic by seed, ~50/50, fully reversible):
+    #   arm "keyword" = legacy front-loaded search stack (the old fixed title)
+    #   arm "hook"    = distinctive hook LEADS, with one rotating search phrase
+    #                   appended so we don't sacrifice discoverability.
+    # Hypothesis (from this channel's own data, small-n / directional): hook-led
+    # titles earn more views/day than the keyword stack. Both arms run in the
+    # SAME time window, which removes the video-age / algorithm-drift confound a
+    # full flip would have introduced. Search indexing is preserved in BOTH arms
+    # via the `tags` field below, so the hook arm doesn't lose SEO.
+    # HOW TO READ IT: judge at a fixed 48h-views snapshot, NOT raw counts, once
+    # each arm has ~10 videos (~3 weeks at 1/day). Keep the winner; if the gap
+    # is inside noise, default back to "keyword" (better long-tail search).
+    arm = "hook" if _pick([0, 1], seed, "abtest") else "keyword"
+    kw = _pick(SEARCH_KEYWORDS, seed, "titlekw")        # one rotating phrase
+    if arm == "hook":
+        title = f"{title_core} | {kw} #shorts"
+    else:
+        title = f"{' | '.join(SEARCH_KEYWORDS[:3])} | {CHANNEL} #shorts"
     if len(title) > 100:
-        title = title[:97].rstrip() + "..."    
+        title = title[:97].rstrip() + "..."
 
     opener = _pick(OPENERS, seed, "open")
     cat_tag = (category or "").strip().lower()
@@ -86,7 +104,8 @@ def generate(riddle, answer, seed, category=None, video_url=None):
         out.append(t); total += len(t) + 1
 
     return {"title": title, "description": description, "tags": out,
-            "hashtags": hashtags, "category_id": "24"}  # 24 = Entertainment
+            "hashtags": hashtags, "category_id": "24",  # 24 = Entertainment
+            "ab_arm": arm}  # which title arm this video used (for measurement)
 
 if __name__ == "__main__":
     import json
