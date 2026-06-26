@@ -74,11 +74,15 @@ def generate(riddle, answer, seed, category=None, video_url=None):
     arm = "hook" if _pick([0, 1], seed, "abtest") else "keyword"
     kw = _pick(SEARCH_KEYWORDS, seed, "titlekw")        # one rotating phrase
     if arm == "hook":
-        title = f"{title_core} | {kw} #shorts"
+        title = f"{title_core} | {kw}"
     else:
-        title = f"{' | '.join(SEARCH_KEYWORDS[:3])} | {CHANNEL} #shorts"
-    if len(title) > 100:
-        title = title[:97].rstrip() + "..."
+        title = f"{' | '.join(SEARCH_KEYWORDS[:3])} | {CHANNEL}"
+    # Every title ends with the #shorts tag. Trim the CORE (never the tag) so we
+    # stay within YouTube's 100-char limit and #shorts is never lost to truncation.
+    TAG = " #shorts"
+    if len(title) + len(TAG) > 100:
+        title = title[:100 - len(TAG) - 3].rstrip() + "..."
+    title += TAG
 
     opener = _pick(OPENERS, seed, "open")
     cat_tag = (category or "").strip().lower()
