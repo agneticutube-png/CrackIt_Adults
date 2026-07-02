@@ -1,6 +1,7 @@
-name: Daily Riddle Short
+name: Daily Riddle Shorts
 
 # Runs once a day AND on-demand from the Actions tab.
+# Each run builds + uploads VIDEOS_PER_RUN riddles (default 3), one after another.
 # NOTE: cron is UTC and GitHub may delay it by several minutes. Adjust the time.
 on:
   schedule:
@@ -41,13 +42,35 @@ jobs:
           printf '%s' '${{ secrets.YT_CLIENT_SECRET_JSON }}' > client_secret.json
           printf '%s' '${{ secrets.YT_TOKEN_JSON }}' > token.json
 
-      - name: Build next video
-        run: python3 pipeline.py
-
-      - name: Upload to YouTube (private)
+      - name: Build + upload riddles (default 3 per run)
         env:
           YT_PRIVACY: private          # change to "public" only after audit passes
-        run: python3 upload_youtube.py
+          VIDEOS_PER_RUN: "3"          # how many videos to produce this run
+        run: |
+          # Each pass: clear any stale manifest, build ONE video, upload it.
+          # pipeline.py picks the next unposted riddle; upload_youtube.py marks it
+          # posted ONLY on success, so the next pass auto-advances. Clearing the
+          # manifest first prevents re-uploading a previous video if a build is
+          # skipped (e.g. bank exhausted). Stop cleanly on the first failure so a
+          # broken run isn't hammered 3x; already-posted videos are still committed.
+          made=0
+          for i in $(seq 1 "${VIDEOS_PER_RUN:-3}"); do
+            echo "::group::Video $i of ${VIDEOS_PER_RUN:-3}"
+            rm -f next_video.json
+            if ! python3 pipeline.py; then
+              echo "pipeline.py failed on video $i — stopping."; echo "::endgroup::"; break
+            fi
+            if [ ! -f next_video.json ]; then
+              echo "No new manifest (bank likely exhausted). Stopping after $made."; echo "::endgroup::"; break
+            fi
+            if ! python3 upload_youtube.py; then
+              echo "upload_youtube.py failed on video $i — stopping."; echo "::endgroup::"; break
+            fi
+            made=$((made+1))
+            echo "::endgroup::"
+          done
+          echo "Uploaded $made video(s) this run."
+          if [ "$made" -eq 0 ]; then exit 1; fi   # surface a fully-failed run as red
 
       - name: Commit updated workbook (posted state)
         run: |
