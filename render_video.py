@@ -69,7 +69,7 @@ HOOKS = [
 ]
 # On-screen prompt shown under the timer. Rotated per video for variety AND to
 # turn silent views into comment engagement. No fabricated stats by design.
-TIPS = ["COMMENT YOUR TIME", "GOT IT IN 10s? COMMENT", "CRACKED IT? COMMENT", "SOLVED IT? COMMENT YOUR TIME"]
+TIPS = ["COMMENT YOUR TIME!"]
 
 def _h(seed, salt):
     return int(hashlib.sha256(f"{seed}:{salt}".encode()).hexdigest(), 16)
@@ -181,9 +181,36 @@ def render(riddle, answer, seed, out_path, kind="adult", fps=30):
     riddle = re.sub(r'\s*what am i\s*\??\s*$', '', str(riddle), flags=re.I).strip()
     framedir = tempfile.mkdtemp(prefix=f"riddle_frames_{seed}_")
 
-    BG = base_bg(theme); riddle_font = SERIF_B(64)
-    rlines = wrap(ImageDraw.Draw(BG.copy()), riddle, riddle_font, W - 230)
-    hook_lines, hook_sub = theme["hook"]; q_cy = theme["q_cy"]
+    BG = base_bg(theme)
+    # --- Dynamic riddle fit ---------------------------------------------------
+    # The riddle must ALWAYS sit in the band BETWEEN the header badge and the
+    # countdown ring, with padding on both sides, no matter how many lines it
+    # wraps to (the sheet feeds variable-length riddles). We center the
+    # (riddle + "What am I?") block in that band, and auto-shrink the font a step
+    # at a time if a long riddle would otherwise crowd either edge — so it can
+    # never overlap the template.
+    md = ImageDraw.Draw(BG.copy())                  # measuring surface
+    HEADER_BOT = 326                                # badge bottom (safe-area)
+    RING_TOP   = 1230 - 150                         # countdown ring top edge (1080)
+    TOP_PAD, BOT_PAD = 120, 90                      # breathing room above/below
+    BAND_TOP, BAND_BOT = HEADER_BOT + TOP_PAD, RING_TOP - BOT_PAD
+    BAND_H = BAND_BOT - BAND_TOP
+    wa_font = SERIF(50); _wa = wa_font.getmetrics(); WA_H = _wa[0] + _wa[1]
+    WA_GAP = 46                                     # gap: riddle block -> "What am I?"
+    rf_size = 64
+    while True:
+        riddle_font = SERIF_B(rf_size)
+        rlines = wrap(md, riddle, riddle_font, W - 230)
+        asc, desc = riddle_font.getmetrics(); lh_px = int((asc + desc) * 1.3)
+        block_h = lh_px * len(rlines)
+        total_h = block_h + WA_GAP + WA_H
+        if total_h <= BAND_H or rf_size <= 44:
+            break
+        rf_size -= 4
+    block_top = BAND_TOP + (BAND_H - total_h) / 2   # center block within the band
+    q_cy = block_top + block_h / 2                  # draw_block center for the riddle
+    wa_y = block_top + block_h + WA_GAP             # top of the "What am I?" line
+    hook_lines, hook_sub = theme["hook"]
     HOLD = {"f0": None}  # cached frame 0, filled after frame() is defined
 
     def frame(i):
@@ -194,10 +221,12 @@ def render(riddle, answer, seed, out_path, kind="adult", fps=30):
         # cut, so viewers fall back into the hook instead of swiping at reveal.
         outro = 1.0 - smooth((t - 19.0) / 1.0) if t >= 19.0 else 1.0
         kf = SANS_B(34); kick = theme["kicker"]; kw = spaced_w(d, kick, kf, 10)
+        # Safe-area: keep the badge below the platform top-nav band (~12% on
+        # IG/Shorts). Sits at ~13-17% so Reels/Friends tabs don't cover it.
         bx0 = (W - (kw + 84)) / 2
-        d.rounded_rectangle([bx0, 150, bx0 + kw + 84, 226], radius=38,
+        d.rounded_rectangle([bx0, 250, bx0 + kw + 84, 326], radius=38,
                             fill=(GOLD[0], GOLD[1], GOLD[2], 235))
-        spaced(d, kick, kf, bx0 + 42, 170, (TOP[0], TOP[1], TOP[2]), 10)
+        spaced(d, kick, kf, bx0 + 42, 270, (TOP[0], TOP[1], TOP[2]), 10)
 
         if t < 2.0:
             a = int(255 * smooth(t / 0.5))
@@ -210,9 +239,9 @@ def render(riddle, answer, seed, out_path, kind="adult", fps=30):
         a = 255 if t >= 4.0 else int(255 * smooth((t - 2.0) / 0.8))
         draw_block(d, rlines, riddle_font, q_cy, (CREAM[0], CREAM[1], CREAM[2], a), lh=1.3)
         if t >= 3.5:
-            wa_a = int(255 * smooth((t - 3.5) / 0.5)); wf = SERIF(50); wa = "What am I?"
-            d.text(((W - d.textlength(wa, font=wf)) / 2, q_cy + len(rlines) * 95 / 2 + 40),
-                   wa, font=wf, fill=(GOLD[0], GOLD[1], GOLD[2], wa_a))
+            wa_a = int(255 * smooth((t - 3.5) / 0.5)); wa = "What am I?"
+            d.text(((W - d.textlength(wa, font=wa_font)) / 2, wa_y),
+                   wa, font=wa_font, fill=(GOLD[0], GOLD[1], GOLD[2], wa_a))
 
         cx, cy, R = W // 2, 1230, 150
         if 7.0 <= t < 17.0:
@@ -234,12 +263,12 @@ def render(riddle, answer, seed, out_path, kind="adult", fps=30):
             d.text((cx - (bb[2] - bb[0]) / 2 - bb[0], cy - (bb[3] - bb[1]) / 2 - bb[1]),
                    ns, font=nf, fill=(CREAM[0], CREAM[1], CREAM[2], 255))
             tf = SANS_B(30); tip = theme["tip"]
-            spaced(d, tip, tf, cx - spaced_w(d, tip, tf, 6) / 2, cy + R + 36,
-                   (DIM[0], DIM[1], DIM[2], 255), 6)
-            cf = SANS_B(40); c1 = "Follow for a new riddle every day"
-            cta_a = int(255 * smooth((t - 7.0) / 0.8))
-            d.text(((W - d.textlength(c1, font=cf)) / 2, 1740),
-                   c1, font=cf, fill=(GOLD[0], GOLD[1], GOLD[2], cta_a))
+            spaced(d, tip, tf, cx - spaced_w(d, tip, tf, 6) / 2, cy + R + 90,
+                   (GOLD[0], GOLD[1], GOLD[2], 255), 6)
+            # NOTE: the old "Follow for a new riddle every day" line at y=1740
+            # (~91%) was removed — it fell inside the platform bottom band
+            # (IG username + caption + comment bar) and was always buried. The
+            # follow CTA now lives in the caption/description, not baked in.
 
         if t >= 17.0:
             p = smooth((t - 17.0) / 0.45)
