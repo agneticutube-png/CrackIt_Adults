@@ -68,8 +68,11 @@ HOOKS = [
     (["A riddle", "for the bold"], "How fast can you crack it?"),
 ]
 # On-screen prompt shown under the timer. Rotated per video for variety AND to
-# turn silent views into comment engagement. No fabricated stats by design.
-TIPS = ["COMMENT YOUR TIME!"]
+# turn silent views into comment engagement. Challenge/deadline-framed and using
+# "guess" (lower stakes than "answer" = more lurkers comment). No stats by design.
+TIPS = ["GUESS BEFORE THE TIMER", "THINK YOU KNOW? PROVE IT",
+        "COMMENT YOUR GUESS", "FIRST TO GUESS WINS",
+        "CAN YOU CRACK IT? COMMENT", "DROP YOUR GUESS BELOW"]
 
 def _h(seed, salt):
     return int(hashlib.sha256(f"{seed}:{salt}".encode()).hexdigest(), 16)
@@ -228,20 +231,23 @@ def render(riddle, answer, seed, out_path, kind="adult", fps=30):
                             fill=(GOLD[0], GOLD[1], GOLD[2], 235))
         spaced(d, kick, kf, bx0 + 42, 270, (TOP[0], TOP[1], TOP[2]), 10)
 
-        if t < 2.0:
-            a = int(255 * smooth(t / 0.5))
-            draw_block(d, hook_lines, SERIF_B(78), H // 2 - 40, (CREAM[0], CREAM[1], CREAM[2], a))
-            sf = SANS(38)
-            d.text(((W - d.textlength(hook_sub, font=sf)) / 2, H // 2 + 170),
-                   hook_sub, font=sf, fill=(DIM[0], DIM[1], DIM[2], a))
-            return img
-
-        a = 255 if t >= 4.0 else int(255 * smooth((t - 2.0) / 0.8))
+        # HOOK = CONTENT. The riddle is on-screen from frame 0 (fast 0.4s fade-in)
+        # so a scroller sees real substance immediately, not a content-free hook
+        # card. (Data: avg view duration ~4.7s on a 20s video meant most viewers
+        # swiped during the old 2s generic hook, before the riddle ever appeared.)
+        a = 255 if t >= 0.4 else int(255 * smooth(t / 0.4))
         draw_block(d, rlines, riddle_font, q_cy, (CREAM[0], CREAM[1], CREAM[2], a), lh=1.3)
-        if t >= 3.5:
-            wa_a = int(255 * smooth((t - 3.5) / 0.5)); wa = "What am I?"
+        if t >= 0.8:
+            wa_a = int(255 * smooth((t - 0.8) / 0.4)); wa = "What am I?"
             d.text(((W - d.textlength(wa, font=wa_font)) / 2, wa_y),
                    wa, font=wa_font, fill=(GOLD[0], GOLD[1], GOLD[2], wa_a))
+        # Brief attention sub-line just under the badge, fades out by ~2s — keeps
+        # the "hook" energy without ever hiding the riddle.
+        if t < 2.1:
+            sa = int(255 * (smooth(t / 0.3) if t < 0.3 else max(0.0, 1 - smooth((t - 1.4) / 0.7))))
+            sf = SANS(34)
+            d.text(((W - d.textlength(hook_sub, font=sf)) / 2, 360),
+                   hook_sub, font=sf, fill=(DIM[0], DIM[1], DIM[2], sa))
 
         cx, cy, R = W // 2, 1230, 150
         if 7.0 <= t < 17.0:
