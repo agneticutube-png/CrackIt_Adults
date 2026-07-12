@@ -13,6 +13,12 @@ API:
 import hashlib
 
 CHANNEL = "Riddle o'Clock"
+# Channel handle + one-tap subscribe link. The ?sub_confirmation=1 param makes
+# YouTube pop the Subscribe dialog the moment the link is tapped (the closest
+# thing to "auto-subscribe" that actually exists). Used in the description and
+# the auto-pinned comment. If the handle ever changes, update it here only.
+CHANNEL_URL = "https://www.youtube.com/@RiddleoClock-l7k"
+SUBSCRIBE_LINK = f"{CHANNEL_URL}?sub_confirmation=1"
 
 # Title patterns. {a}=answer is intentionally NEVER in the title (no spoiler).
 TITLE_PATTERNS = [
@@ -93,7 +99,8 @@ def generate(riddle, answer, seed, category=None, video_url=None):
         f"{opener}\n\n"
         f"\u2753 {riddle.strip()}\n\n"
         f"Comment your answer before the timer runs out \u2014 then watch again to reveal it.\n\n"
-        f"\u23f0 {CHANNEL}: a new riddle every single day. Follow so you never miss one.\n\n"
+        f"\u23f0 {CHANNEL}: a new riddle every single day.\n"
+        f"\U0001f514 Subscribe (one tap): {SUBSCRIBE_LINK}\n\n"
         f"{' '.join(hashtags)}"
     )
     if video_url:
@@ -110,6 +117,20 @@ def generate(riddle, answer, seed, category=None, video_url=None):
     return {"title": title, "description": description, "tags": out,
             "hashtags": hashtags, "category_id": "24",  # 24 = Entertainment
             "ab_arm": arm}  # which title arm this video used (for measurement)
+
+
+def pinned_comment(seed=0):
+    """Engagement seed + one-tap subscribe, to post (and pin) after upload."""
+    prompts = [
+        "Did you crack it before the timer? Drop your guess below \U0001f447",
+        "Got it in time? Comment your answer \u2014 no scrolling ahead!",
+        "Think you nailed it? Prove it in the comments \U0001f447",
+        "How many can you solve in a row? Comment your streak!",
+    ]
+    seed_i = int(hashlib.sha256(f"{seed}pin".encode()).hexdigest(), 16) % len(prompts)
+    return (f"{prompts[seed_i]}\n\n"
+            f"\U0001f514 New riddle every day \u2014 subscribe in one tap: {SUBSCRIBE_LINK}")
+
 
 if __name__ == "__main__":
     import json

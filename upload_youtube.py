@@ -69,6 +69,22 @@ def upload(manifest, service):
             print(f"  upload {int(status.progress()*100)}%")
     return resp["id"]
 
+def post_comment(service, video_id, text):
+    """Post a top-level comment (engagement seed + one-tap subscribe link).
+    NOTE: the YouTube Data API can POST a comment but CANNOT pin it — pinning
+    is Studio-only (a one-tap manual step). Non-fatal: a failure here never
+    blocks the upload itself."""
+    try:
+        service.commentThreads().insert(
+            part="snippet",
+            body={"snippet": {"videoId": video_id,
+                              "topLevelComment": {"snippet": {"textOriginal": text}}}},
+        ).execute()
+        print("  posted comment (pin it manually in Studio — API can't pin).")
+    except Exception as e:  # noqa: BLE001 — never let a comment error fail the run
+        print(f"  comment skipped: {e}")
+
+
 def main():
     if not os.path.exists(MANIFEST):
         sys.exit("No manifest. Run pipeline.py first.")
@@ -92,6 +108,10 @@ def main():
     pipeline.mark_posted(XLSX, manifest["sheet"], manifest["row"],
                          manifest["posted_col"], manifest["link_col"], url)
     print("Marked posted in workbook.")
+
+    # Seed engagement + drop the one-tap subscribe link as a comment (non-fatal).
+    import metadata
+    post_comment(service, vid, metadata.pinned_comment(manifest.get("seed", 0)))
 
     # Manual-publish mode: print the link so it's captured in the run log.
     studio = f"https://studio.youtube.com/video/{vid}/edit"

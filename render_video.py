@@ -60,7 +60,11 @@ BG_STYLES   = ["vertical", "diagonal", "radial"]
 ACCENTS     = ["frame", "brackets", "rules", "none"]
 WM_POS      = ["center", "upper", "lower"]
 RING_STYLES = ["solid", "ticks"]
-KICKERS     = ["DAILY RIDDLE", "RIDDLE O'CLOCK", "BRAIN TEASER", "CAN YOU SOLVE IT?"]
+# Rotating CATEGORY chip in the badge (variety / anti-templating). The brand
+# name itself is NOT here — it's a fixed handle drawn under the badge every frame
+# (see BRAND), so the badge stays a category and never duplicates the brand line.
+KICKERS     = ["DAILY RIDDLE", "BRAIN TEASER", "CAN YOU SOLVE IT?"]
+BRAND       = "RIDDLE O'CLOCK"   # persistent on-screen brand handle (every frame)
 HOOKS = [
     (["Can you", "solve this?"], "Most people get it wrong"),
     (["There's a", "hidden twist"], "The answer isn't what you think"),
@@ -241,13 +245,14 @@ def render(riddle, answer, seed, out_path, kind="adult", fps=30):
             wa_a = int(255 * smooth((t - 0.8) / 0.4)); wa = "What am I?"
             d.text(((W - d.textlength(wa, font=wa_font)) / 2, wa_y),
                    wa, font=wa_font, fill=(GOLD[0], GOLD[1], GOLD[2], wa_a))
-        # Brief attention sub-line just under the badge, fades out by ~2s — keeps
-        # the "hook" energy without ever hiding the riddle.
-        if t < 2.1:
-            sa = int(255 * (smooth(t / 0.3) if t < 0.3 else max(0.0, 1 - smooth((t - 1.4) / 0.7))))
-            sf = SANS(34)
-            d.text(((W - d.textlength(hook_sub, font=sf)) / 2, 360),
-                   hook_sub, font=sf, fill=(DIM[0], DIM[1], DIM[2], sa))
+        # Persistent BRAND handle just under the badge — drawn on EVERY frame
+        # (incl. frame 0 / the poster and the answer-reveal frame) so the brand
+        # travels with screenshots and re-uploads. Sits in the safe top zone,
+        # clear of the platform top-nav and bottom caption/action bands. Small,
+        # gold, letter-spaced; the badge above stays the rotating category chip.
+        bf = SANS_B(30)
+        spaced(d, BRAND, bf, (W - spaced_w(d, BRAND, bf, 8)) / 2, 356,
+               (GOLD[0], GOLD[1], GOLD[2], 255), 8)
 
         cx, cy, R = W // 2, 1230, 150
         if 7.0 <= t < 17.0:
@@ -287,6 +292,29 @@ def render(riddle, answer, seed, out_path, kind="adult", fps=30):
                    (150, 102, 24, int(255 * p)), 8)
             af = SERIF_B(86); alines = wrap(d, str(answer), af, cardw - 120)
             draw_block(d, alines, af, cy0 + cardh / 2 + 30, (24, 28, 56, int(255 * p)), lh=1.2)
+
+        # Delightful SUBSCRIBE nudge at the reveal moment (the dopamine peak — the
+        # viewer just got the answer, best possible time to ask). It slides up into
+        # place just under the answer card and POINTS at YouTube's own Subscribe
+        # button (a play glyph + "SUBSCRIBE"). It is NOT a tappable element: Shorts
+        # video frames aren't interactive and have no cards/end-screens, so the real
+        # one-tap subscribe is (a) YouTube's native button in the player and (b) the
+        # ?sub_confirmation=1 link in the description / pinned comment. The final
+        # second loop-blend (t>=19) dissolves this pill toward frame 0 (which has no
+        # pill), so it fades out naturally and the seamless loop stays intact.
+        if t >= 17.4:
+            slide = (1.0 - smooth(min((t - 17.4) / 0.4, 1.0))) * 64
+            py0 = 1582 + slide; ph = 86
+            lab = "SUBSCRIBE  \u00b7  DAILY RIDDLE"; sfont = SANS_B(34)
+            lw = spaced_w(d, lab, sfont, 4); tri_w = 34; gap = 24
+            pill_w = tri_w + gap + lw + 96; px0 = (W - pill_w) / 2
+            d.rounded_rectangle([px0, py0, px0 + pill_w, py0 + ph], radius=43,
+                                fill=(GOLD[0], GOLD[1], GOLD[2], 255))
+            tx = px0 + 46; tcy = py0 + ph / 2
+            d.polygon([(tx, tcy - 19), (tx, tcy + 19), (tx + tri_w, tcy)],
+                      fill=(TOP[0], TOP[1], TOP[2]))
+            spaced(d, lab, sfont, tx + tri_w + gap, py0 + ph / 2 - 20,
+                   (TOP[0], TOP[1], TOP[2]), 4)
 
         # Rec 2 (seamless loop): PIL ignores per-fill alpha on this draw surface,
         # so fade-out must be done by pixel blending whole frames. In the final
