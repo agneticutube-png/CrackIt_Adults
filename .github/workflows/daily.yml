@@ -41,18 +41,30 @@ jobs:
         run: |
           printf '%s' '${{ secrets.YT_CLIENT_SECRET_JSON }}' > client_secret.json
           printf '%s' '${{ secrets.YT_TOKEN_JSON }}' > token.json
+          printf '%s' '${{ secrets.DRIVE_TOKEN_JSON }}' > drive_token.json
+
+      - name: Restore Drive folder cache (avoids creating a new folder every run)
+        uses: actions/cache@v4
+        with:
+          path: .drive_folder_id.json
+          key: drive-folder-cache
 
       - name: Build + upload riddles (default 3 per run)
         env:
           YT_PRIVACY: private          # change to "public" only after audit passes
           VIDEOS_PER_RUN: "3"          # how many videos to produce this run
         run: |
-          # Each pass: clear any stale manifest, build ONE video, upload it.
-          # pipeline.py picks the next unposted riddle; upload_youtube.py marks it
-          # posted ONLY on success, so the next pass auto-advances. Clearing the
-          # manifest first prevents re-uploading a previous video if a build is
-          # skipped (e.g. bank exhausted). Stop cleanly on the first failure so a
-          # broken run isn't hammered 3x; already-posted videos are still committed.
+          # Each pass: clear any stale manifest, build ONE video, back it up to
+          # Drive, then upload it to YouTube. pipeline.py picks the next unposted
+          # riddle; upload_youtube.py marks it posted ONLY on success, so the next
+          # pass auto-advances. Clearing the manifest first prevents re-uploading a
+          # previous video if a build is skipped (e.g. bank exhausted). The Drive
+          # backup runs BEFORE the YouTube upload and is non-fatal (|| true) so a
+          # Drive hiccup never blocks the actual publish — but on the happy path it
+          # guarantees every rendered video is retrievable outside the ephemeral
+          # runner, even if the YouTube step fails afterward. Stop cleanly on the
+          # first YouTube failure so a broken run isn't hammered 3x; already-posted
+          # videos are still committed.
           made=0
           for i in $(seq 1 "${VIDEOS_PER_RUN:-3}"); do
             echo "::group::Video $i of ${VIDEOS_PER_RUN:-3}"
@@ -63,6 +75,7 @@ jobs:
             if [ ! -f next_video.json ]; then
               echo "No new manifest (bank likely exhausted). Stopping after $made."; echo "::endgroup::"; break
             fi
+            python3 upload_drive.py || echo "Drive backup failed on video $i (non-fatal) — continuing."
             if ! python3 upload_youtube.py; then
               echo "upload_youtube.py failed on video $i — stopping."; echo "::endgroup::"; break
             fi
