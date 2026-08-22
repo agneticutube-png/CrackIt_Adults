@@ -1,5 +1,7 @@
 client_secret.json
 token.json
+drive_token.json
+.drive_folder_id.json
 next_video.json
 Videos/
 .venv/
