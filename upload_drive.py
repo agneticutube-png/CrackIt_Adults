@@ -5,27 +5,32 @@ that lets other tools (e.g. cross-posting to Meta Business Suite) pick the
 video up right after it's rendered, instead of only existing transiently on
 the GitHub Actions runner and then disappearing once it's uploaded to YouTube.
 
-Runs independently of upload_youtube.py — call it right after pipeline.py so
+Runs independently of upload_youtube.py -- call it right after pipeline.py so
 the video is safely backed up even if the YouTube upload step later fails.
 Never marks anything "posted" in the workbook; that stays upload_youtube.py's
 job.
 
 One-time setup:
-  1. Same Google Cloud project as the YouTube setup -> also enable the
-     "Google Drive API" (APIs & Services -> Library -> Google Drive API).
-  2. Run authorize_drive.py ONCE locally -> creates drive_token.json.
-  3. For GitHub Actions, store client_secret.json (already have it) and
-     drive_token.json contents as secrets (DRIVE_TOKEN_JSON).
+1. Same Google Cloud project as the YouTube setup -> also enable the
+"Google Drive API" (APIs & Services -> Library -> Google Drive API).
+2. Run authorize_drive.py ONCE locally -> creates drive_token.json.
+3. For GitHub Actions, store client_secret.json (already have it) and
+drive_token.json contents as secrets (DRIVE_TOKEN_JSON).
 
 On first run this creates a "CrackIt Daily Videos" folder in the authorizing
 account's Drive (scope is drive.file, so it can only see files/folders it
-creates itself — nothing else in your Drive is touched). Subsequent runs
+creates itself -- nothing else in your Drive is touched). Subsequent runs
 reuse the same folder by searching for its name + storing the id in
 .drive_folder_id.json next to this script (committed to Actions cache, not
-git — see .gitignore).
+git -- see .gitignore).
 
-Run:  python3 upload_drive.py            # uploads manifest video to Drive
-      python3 upload_drive.py --dry-run  # validate manifest, no upload
+After uploading, the file is also made publicly readable ("anyone with the
+link") and its direct-download URL is written to .last_drive_video.json --
+that is what upload_meta.py reads to cross-post the same video to Instagram/
+Facebook, since the Graph API needs a public URL it can fetch server-side.
+
+Run: python3 upload_drive.py             # uploads manifest video to Drive
+python3 upload_drive.py --dry-run  # validate manifest, no upload
 """
 import os, sys, json
 
@@ -38,7 +43,7 @@ SCOPES = ["https://www.googleapis.com/auth/drive.file"]
 
 FOLDER_NAME = os.environ.get("DRIVE_FOLDER_NAME", "CrackIt Daily Videos")
 FOLDER_CACHE = os.environ.get("DRIVE_FOLDER_CACHE", f"{DATA_ROOT}/.drive_folder_id.json")
-
+LAST_VIDEO_CACHE = os.environ.get("DRIVE_LAST_VIDEO_CACHE", f"{DATA_ROOT}/.last_drive_video.json")
 
 def get_service():
     from google.oauth2.credentials import Credentials
@@ -50,7 +55,6 @@ def get_service():
         with open(TOKEN, "w") as f:
             f.write(creds.to_json())
     return build("drive", "v3", credentials=creds)
-
 
 def get_or_create_folder(service):
     """Reuse the cached folder id if it still resolves, else search by name
@@ -81,7 +85,6 @@ def get_or_create_folder(service):
         json.dump({"id": folder_id}, f)
     return folder_id
 
-
 def upload(manifest, service, folder_id):
     from googleapiclient.http import MediaFileUpload
     date_prefix = manifest.get("date") or __import__("datetime").date.today().isoformat()
@@ -97,6 +100,19 @@ def upload(manifest, service, folder_id):
             print(f"  upload {int(status.progress() * 100)}%")
     return resp
 
+def make_public(service, file_id):
+    """Grant 'anyone with the link' read access so the Graph API (Instagram/
+    Facebook) can fetch the video server-side. Non-fatal if it fails -- the
+    Drive backup itself already succeeded by this point."""
+    try:
+        service.permissions().create(
+            fileId=file_id,
+            body={"type": "anyone", "role": "reader"},
+        ).execute()
+        return True
+    except Exception as e:
+        print(f"  WARNING: could not make file public ({e}); Meta cross-post will be skipped.")
+        return False
 
 def main():
     if not os.path.exists(MANIFEST):
@@ -108,14 +124,21 @@ def main():
     print(f"  file: {manifest['video_path']}")
 
     if "--dry-run" in sys.argv:
-        print("DRY RUN — not uploading.")
+        print("DRY RUN -- not uploading.")
         return
 
     service = get_service()
     folder_id = get_or_create_folder(service)
     resp = upload(manifest, service, folder_id)
-    print("DRIVE BACKUP OK:", resp.get("webViewLink", resp.get("id")))
+    file_id = resp.get("id")
+    print("DRIVE BACKUP OK:", resp.get("webViewLink", file_id))
 
+    if file_id and make_public(service, file_id):
+        direct_url = f"https://drive.google.com/uc?export=download&id={file_id}"
+        with open(LAST_VIDEO_CACHE, "w") as f:
+            json.dump({"file_id": file_id, "video_url": direct_url,
+                       "web_view_link": resp.get("webViewLink")}, f)
+        print("PUBLIC VIDEO URL:", direct_url)
 
 if __name__ == "__main__":
     main()
