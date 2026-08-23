@@ -66,7 +66,10 @@ jobs:
           # guarantees every rendered video is retrievable outside the ephemeral
           # runner, even if the YouTube step fails afterward. Meta cross-post runs
           # right after the Drive backup (needs the public Drive URL) and is also
-          # non-fatal, so a Instagram/Facebook hiccup never blocks YouTube. Stop
+          # non-fatal, so a Instagram/Facebook hiccup never blocks YouTube. Instagram
+          # posting is temporarily disabled below (--ig removed) until its timing
+          # issue is sorted out -- only --fb is passed, and that itself is a no-op
+          # until FB_PAGE_ACCESS_TOKEN is valid (pending Meta App Review). Stop
           # cleanly on the first YouTube failure so a broken run isn't hammered 3x;
           # already-posted videos are still committed.
           made=0
@@ -80,7 +83,7 @@ jobs:
               echo "No new manifest (bank likely exhausted). Stopping after $made."; echo "::endgroup::"; break
             fi
             python3 upload_drive.py || echo "Drive backup failed on video $i (non-fatal) -- continuing."
-            python3 upload_meta.py --ig --fb || echo "Meta cross-post failed on video $i (non-fatal) -- continuing."
+            python3 upload_meta.py --fb || echo "Meta cross-post failed on video $i (non-fatal) -- continuing."
             if ! python3 upload_youtube.py; then
               echo "upload_youtube.py failed on video $i -- stopping."; echo "::endgroup::"; break
             fi
