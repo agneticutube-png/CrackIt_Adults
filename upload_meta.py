@@ -164,45 +164,26 @@ def post_instagram_reel(video_url, caption, token):
 
 
 def post_facebook_reel(video_url, caption, token):
-    print("=== Facebook Page: starting Reel upload ===")
-    start = _post(f"{GRAPH}/{FB_PAGE_ID}/video_reels", {
-        "upload_phase": "start",
-        "access_token": token,
-    })
-    video_id = start.get("video_id")
-    upload_url = start.get("upload_url")
-    if not video_id or not upload_url:
-        print("  Failed to start upload session:", start)
-        sys.exit(1)
-    print(f"  video_id: {video_id}")
-
-    print("  handing the public video URL to Meta for server-side fetch...")
-    req = urllib.request.Request(upload_url, method="POST", headers={
-        "Authorization": f"OAuth {token}",
+    """Publish to the Facebook Page using the classic /{page-id}/videos
+    endpoint (server-side fetch via file_url) rather than the newer
+    /video_reels endpoint. video_reels requires the pages_manage_posts
+    permission, which needs Meta App Review (business verification) before
+    it's grantable -- not available for self-serve testing. The classic
+    /videos endpoint works with the publish_video permission we already
+    have. It posts as a regular Page video rather than a native Reel;
+    functionally it still publishes and shows up on the Page."""
+    print("=== Facebook Page: uploading video (classic /videos endpoint) ===")
+    result = _post(f"{GRAPH}/{FB_PAGE_ID}/videos", {
         "file_url": video_url,
-    })
-    try:
-        with urllib.request.urlopen(req) as resp:
-            upload_resp = json.loads(resp.read().decode())
-            print("  upload response:", upload_resp)
-    except urllib.error.HTTPError as e:
-        print(f"  HTTP {e.code} error during upload:\n  {e.read().decode()}")
-        sys.exit(1)
-
-    print("=== Facebook Page: publishing Reel ===")
-    finish = _post(f"{GRAPH}/{FB_PAGE_ID}/video_reels", {
-        "upload_phase": "finish",
-        "video_id": video_id,
         "description": caption,
-        "video_state": "PUBLISHED",
         "access_token": token,
     })
-    if finish.get("success"):
-        print(f"  PUBLISHED. video id: {video_id}")
-        print(f"  view: https://www.facebook.com/{FB_PAGE_ID}/videos/{video_id}/")
-    else:
-        print("  Finish call did not report success:", finish)
+    video_id = result.get("id")
+    if not video_id:
+        print("  Upload did not return an id:", result)
         sys.exit(1)
+    print(f"  PUBLISHED. video id: {video_id}")
+    print(f"  view: https://www.facebook.com/{FB_PAGE_ID}/videos/{video_id}/")
 
 
 def main():
