@@ -5,9 +5,9 @@ name: Daily Riddle Shorts
 # NOTE: cron is UTC and GitHub may delay it by several minutes. Adjust the time.
 on:
   schedule:
-    - cron: "30 23 * * *"    # 23:30 UTC = 5:00 AM IST daily
-    
-  workflow_dispatch: {}       # manual "Run workflow" button
+    - cron: "30 23 * * *"   # 23:30 UTC = 5:00 AM IST daily
+
+  workflow_dispatch: {}      # manual "Run workflow" button
 
 # allow the job to commit the updated workbook (posted state) back
 permissions:
@@ -51,8 +51,10 @@ jobs:
 
       - name: Build + upload riddles (default 3 per run)
         env:
-          YT_PRIVACY: private          # change to "public" only after audit passes
-          VIDEOS_PER_RUN: "3"          # how many videos to produce this run
+          YT_PRIVACY: private           # change to "public" only after audit passes
+          VIDEOS_PER_RUN: "3"           # how many videos to produce this run
+          IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
+          FB_PAGE_ACCESS_TOKEN: ${{ secrets.FB_PAGE_ACCESS_TOKEN }}
         run: |
           # Each pass: clear any stale manifest, build ONE video, back it up to
           # Drive, then upload it to YouTube. pipeline.py picks the next unposted
@@ -60,24 +62,27 @@ jobs:
           # pass auto-advances. Clearing the manifest first prevents re-uploading a
           # previous video if a build is skipped (e.g. bank exhausted). The Drive
           # backup runs BEFORE the YouTube upload and is non-fatal (|| true) so a
-          # Drive hiccup never blocks the actual publish — but on the happy path it
+          # Drive hiccup never blocks the actual publish -- but on the happy path it
           # guarantees every rendered video is retrievable outside the ephemeral
-          # runner, even if the YouTube step fails afterward. Stop cleanly on the
-          # first YouTube failure so a broken run isn't hammered 3x; already-posted
-          # videos are still committed.
+          # runner, even if the YouTube step fails afterward. Meta cross-post runs
+          # right after the Drive backup (needs the public Drive URL) and is also
+          # non-fatal, so a Instagram/Facebook hiccup never blocks YouTube. Stop
+          # cleanly on the first YouTube failure so a broken run isn't hammered 3x;
+          # already-posted videos are still committed.
           made=0
           for i in $(seq 1 "${VIDEOS_PER_RUN:-3}"); do
             echo "::group::Video $i of ${VIDEOS_PER_RUN:-3}"
             rm -f next_video.json
             if ! python3 pipeline.py; then
-              echo "pipeline.py failed on video $i — stopping."; echo "::endgroup::"; break
+              echo "pipeline.py failed on video $i -- stopping."; echo "::endgroup::"; break
             fi
             if [ ! -f next_video.json ]; then
               echo "No new manifest (bank likely exhausted). Stopping after $made."; echo "::endgroup::"; break
             fi
-            python3 upload_drive.py || echo "Drive backup failed on video $i (non-fatal) — continuing."
+            python3 upload_drive.py || echo "Drive backup failed on video $i (non-fatal) -- continuing."
+            python3 upload_meta.py --ig --fb || echo "Meta cross-post failed on video $i (non-fatal) -- continuing."
             if ! python3 upload_youtube.py; then
-              echo "upload_youtube.py failed on video $i — stopping."; echo "::endgroup::"; break
+              echo "upload_youtube.py failed on video $i -- stopping."; echo "::endgroup::"; break
             fi
             made=$((made+1))
             echo "::endgroup::"
