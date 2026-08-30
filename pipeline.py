@@ -35,7 +35,7 @@ SOURCES = [
     {"sheet": "Adult \u2013 Original", "riddle": 2, "answer": 3, "category": 4,
      "posted": 6, "link": 7, "first": 2, "last": 21},
     {"sheet": "Adult Riddles", "riddle": 4, "answer": 5, "category": 6,
-     "posted": 8, "link": 9, "first": 2, "last": 201},
+     "posted": 8, "link": 9, "first": 2, "last": 301},
 ]
 
 def _is_posted(v):
