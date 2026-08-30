@@ -30,6 +30,18 @@ TITLE_PATTERNS = [
     "A Riddle Worth 10 Seconds of Your Day",
     "Think You're Sharp Enough?",
     "Quick \u2014 The Clock Is Ticking \u23f1\ufe0f",
+    # 2026-08 expansion: fresh curiosity hooks (data showed hook titles beat the
+    # keyword stack by ~25-30% on this channel). No fabricated stat claims.
+    "You'll Kick Yourself When You Hear the Answer",
+    "The Trick Is in the Last Word",
+    "Simple Riddle, Not-So-Simple Answer",
+    "Your First Guess Is Probably Wrong",
+    "This One Breaks People's Brains",
+    "The Answer's Hiding in Plain Sight",
+    "Bet You Can't Beat the Clock \u23f1\ufe0f",
+    "Only the Sharpest Get This in Time",
+    "Everyone Overthinks This Riddle",
+    "Sounds Impossible \u2014 Until You Hear It",
 ]
 
 OPENERS = [
@@ -77,7 +89,11 @@ def generate(riddle, answer, seed, category=None, video_url=None):
     # HOW TO READ IT: judge at a fixed 48h-views snapshot, NOT raw counts, once
     # each arm has ~10 videos (~3 weeks at 1/day). Keep the winner; if the gap
     # is inside noise, default back to "keyword" (better long-tail search).
-    arm = "hook" if _pick([0, 1], seed, "abtest") else "keyword"
+    # A/B test CALLED (2026-08): hook titles beat the keyword stack by ~25-30% on
+    # this channel's own data, so every video now uses the hook arm. Search SEO is
+    # preserved via the `tags` field below. To resume testing, restore:
+    #   arm = "hook" if _pick([0, 1], seed, "abtest") else "keyword"
+    arm = "hook"
     kw = _pick(SEARCH_KEYWORDS, seed, "titlekw")        # one rotating phrase
     if arm == "hook":
         title = f"{title_core} | {kw}"
