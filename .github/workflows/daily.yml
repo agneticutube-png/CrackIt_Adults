@@ -83,7 +83,7 @@ jobs:
               echo "No new manifest (bank likely exhausted). Stopping after $made."; echo "::endgroup::"; break
             fi
             python3 upload_drive.py || echo "Drive backup failed on video $i (non-fatal) -- continuing."
-            python3 upload_meta.py --fb || echo "Meta cross-post failed on video $i (non-fatal) -- continuing."
+            python3 upload_meta.py --ig --fb || echo "Meta cross-post failed on video $i (non-fatal) -- continuing."
             if ! python3 upload_youtube.py; then
               echo "upload_youtube.py failed on video $i -- stopping."; echo "::endgroup::"; break
             fi
