@@ -1,0 +1,87 @@
+name: Monthly Riddle Marathon
+
+# Builds ONE consolidated compilation from the last N days of Shorts and uploads
+# it to YouTube as PRIVATE (review + publish from Studio, same as the daily run).
+#
+# Default source = "drive": pulls clips from the "CrackIt Daily Videos" folder
+# the daily pipeline already backs up to (clean, lossless, authenticated). This
+# only yields a full video once that folder has ~a month of renders in it.
+#
+# You can also dispatch manually with source = "ytdlp" to pull already-PUBLISHED
+# Shorts straight off the channel (retroactive; public videos only).
+#
+# NOTE: cron is UTC and GitHub may delay it. Runs on the 1st of each month.
+on:
+  schedule:
+    - cron: "30 23 1 * *"     # 23:30 UTC on the 1st = 5:00 AM IST, 1st of month
+  workflow_dispatch:
+    inputs:
+      source:
+        description: "Clip source"
+        type: choice
+        options: ["drive", "ytdlp"]
+        default: "drive"
+      days:
+        description: "Look back this many days"
+        default: "30"
+      limit:
+        description: "Cap to the most recent N clips (~31 = 10 min)"
+        default: "31"
+      orientation:
+        description: "vertical (9:16) or wide (16:9 long-form)"
+        type: choice
+        options: ["wide", "vertical"]
+        default: "wide"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: monthly-riddle
+  cancel-in-progress: false
+
+jobs:
+  compile:
+    runs-on: ubuntu-latest
+    env:
+      RIDDLE_ROOT: ${{ github.workspace }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install ffmpeg + DejaVu fonts
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y ffmpeg fonts-dejavu-core
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Python deps (+ yt-dlp for the ytdlp source)
+        run: |
+          pip install -r requirements.txt
+          pip install yt-dlp
+
+      - name: Restore Google credentials from secrets
+        run: |
+          printf '%s' '${{ secrets.YT_CLIENT_SECRET_JSON }}' > client_secret.json
+          printf '%s' '${{ secrets.YT_TOKEN_JSON }}' > token.json
+          printf '%s' '${{ secrets.DRIVE_TOKEN_JSON }}' > drive_token.json
+
+      - name: Restore Drive folder cache (shares the daily pipeline's folder id)
+        uses: actions/cache@v4
+        with:
+          path: .drive_folder_id.json
+          key: drive-folder-cache
+
+      - name: Build + upload monthly compilation (private)
+        env:
+          YT_PRIVACY: private
+        run: |
+          SRC="${{ github.event.inputs.source }}"; SRC="${SRC:-drive}"
+          DAYS="${{ github.event.inputs.days }}"; DAYS="${DAYS:-30}"
+          LIMIT="${{ github.event.inputs.limit }}"; LIMIT="${LIMIT:-31}"
+          ORI="${{ github.event.inputs.orientation }}"; ORI="${ORI:-wide}"
+          echo "Compiling last $DAYS days from $SRC, cap $LIMIT, orientation $ORI"
+          python3 monthly_compile.py --source "$SRC" --days "$DAYS" \
+            --limit "$LIMIT" --orientation "$ORI" --upload

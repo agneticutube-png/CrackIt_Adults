@@ -11,3 +11,17 @@ __pycache__/
 .DS_Store
 .~lock.*#
 audio_samples/
+
+# compilation working files: keep the folder structure, ignore the big videos
+Weekly_Compilation/input/*
+Weekly_Compilation/output/*
+!Weekly_Compilation/input/.gitkeep
+!Weekly_Compilation/output/.gitkeep
+
+# compilation lifecycle folders (videos stay local, not in git)
+downloaded/*
+created/*
+upload/*
+!downloaded/.gitkeep
+!created/.gitkeep
+!upload/.gitkeep
