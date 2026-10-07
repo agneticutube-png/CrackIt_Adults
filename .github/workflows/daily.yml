@@ -4,8 +4,8 @@ name: Daily Riddle Shorts
 # Each run builds + uploads VIDEOS_PER_RUN riddles (default 3), one after another.
 # NOTE: cron is UTC and GitHub may delay it by several minutes. Adjust the time.
 on:
-  schedule:
-    - cron: "30 23 * * *"   # 23:30 UTC = 5:00 AM IST daily
+  # schedule: DISABLED — manual trigger only (re-add the cron line below to resume daily auto-posting)
+    # - cron: "30 23 * * *"   # 23:30 UTC = 5:00 AM IST daily
 
   workflow_dispatch: {}      # manual "Run workflow" button
 
