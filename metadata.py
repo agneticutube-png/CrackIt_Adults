@@ -22,14 +22,9 @@ SUBSCRIBE_LINK = f"{CHANNEL_URL}?sub_confirmation=1"
 
 # Title patterns. {a}=answer is intentionally NEVER in the title (no spoiler).
 TITLE_PATTERNS = [
-    "Can You Solve This in 10 Seconds?",
-    "Beat the Clock: 10-Second Riddle",
     "Most People Get This Wrong \u23f3",
     "This Riddle Has a Hidden Twist",
-    "How Fast Can You Crack It?",
-    "A Riddle Worth 10 Seconds of Your Day",
     "Think You're Sharp Enough?",
-    "Quick \u2014 The Clock Is Ticking \u23f1\ufe0f",
     # 2026-08 expansion: fresh curiosity hooks (data showed hook titles beat the
     # keyword stack by ~25-30% on this channel). No fabricated stat claims.
     "You'll Kick Yourself When You Hear the Answer",
@@ -38,15 +33,13 @@ TITLE_PATTERNS = [
     "Your First Guess Is Probably Wrong",
     "This One Breaks People's Brains",
     "The Answer's Hiding in Plain Sight",
-    "Bet You Can't Beat the Clock \u23f1\ufe0f",
-    "Only the Sharpest Get This in Time",
     "Everyone Overthinks This Riddle",
     "Sounds Impossible \u2014 Until You Hear It",
 ]
 
 OPENERS = [
-    "Here's today's riddle. You've got 10 seconds.",
-    "Can you beat the clock on this one?",
+    "Here's today's riddle. Take your time.",
+    "Can you crack this one?",
     "Most people miss this. Can you get it?",
     "A quick brain teaser for your day.",
     "Read carefully \u2014 the answer hides in plain sight.",
@@ -114,7 +107,7 @@ def generate(riddle, answer, seed, category=None, video_url=None):
     description = (
         f"{opener}\n\n"
         f"\u2753 {riddle.strip()}\n\n"
-        f"Comment your answer before the timer runs out \u2014 then watch again to reveal it.\n\n"
+        f"Comment your guess below \u2014 the answer is in the pinned comment.\n\n"
         f"\u23f0 {CHANNEL}: a new riddle every single day.\n"
         f"\U0001f514 Subscribe (one tap): {SUBSCRIBE_LINK}\n\n"
         f"{' '.join(hashtags)}"
@@ -135,16 +128,17 @@ def generate(riddle, answer, seed, category=None, video_url=None):
             "ab_arm": arm}  # which title arm this video used (for measurement)
 
 
-def pinned_comment(seed=0):
+def pinned_comment(seed=0, answer=""):
     """Engagement seed + one-tap subscribe, to post (and pin) after upload."""
     prompts = [
-        "Did you crack it before the timer? Drop your guess below \U0001f447",
-        "Got it in time? Comment your answer \u2014 no scrolling ahead!",
+        "Did you crack it? Drop your guess below \U0001f447",
+        "Got it? Comment your answer \u2014 no scrolling ahead!",
         "Think you nailed it? Prove it in the comments \U0001f447",
         "How many can you solve in a row? Comment your streak!",
     ]
     seed_i = int(hashlib.sha256(f"{seed}pin".encode()).hexdigest(), 16) % len(prompts)
-    return (f"{prompts[seed_i]}\n\n"
+    head = f"Answer: {answer}\n\n" if answer else ""
+    return (f"{head}{prompts[seed_i]}\n\n"
             f"\U0001f514 New riddle every day \u2014 subscribe in one tap: {SUBSCRIBE_LINK}")
 
 
