@@ -111,7 +111,7 @@ def main():
 
     # Seed engagement + drop the one-tap subscribe link as a comment (non-fatal).
     import metadata
-    post_comment(service, vid, metadata.pinned_comment(manifest.get("seed", 0)))
+    post_comment(service, vid, metadata.pinned_comment(manifest.get("seed", 0), manifest.get("answer", "")))
 
     # Manual-publish mode: print the link so it's captured in the run log.
     studio = f"https://studio.youtube.com/video/{vid}/edit"
