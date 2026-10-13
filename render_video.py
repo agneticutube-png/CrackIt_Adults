@@ -7,16 +7,17 @@ Why this exists: posting visually-identical videos daily is exactly the
 hard-enforces against. This module deterministically varies palette (weekly)
 and layout (per-video) so the channel reads as a crafted series, not a stamp.
 
+FORMAT (riddle-only, comment-driven): the riddle + "What am I?" on screen with
+one of 20 rotating comment prompts. NO countdown, NO answer reveal, NO music.
+DEFAULT = STILL: a single image (.png/.jpg out_path) or, for YouTube (Shorts
+need a video file), that image as a silent 7s still video. Set
+RIDDLE_ANIMATED=1 for the old animated fade-in version.
+The answer is NOT shown in the video, title or description; it is posted as a
+pinned comment after publishing.
+
 Public API:
     render(riddle, answer, seed, out_path, kind="adult", fps=30) -> out_path
     build_theme(seed, kind="adult") -> dict   (inspect a variant without rendering)
-
-Locked format (do not change without product reason):
-    1080x1920 vertical, 20s total: 2s hook, ~5s read, 10s countdown ring
-    (7s->17s), answer reveal (17s), then a seamless-loop outro that fades all
-    content back out so the final frame == frame 0 (bg + kicker only). This
-    makes YouTube's auto-loop cut invisible and pulls viewers back into the
-    hook instead of swiping away at the answer reveal.
 
 CLI (for local testing):
     python3 render_video.py <seed> ["riddle text" "answer"]
@@ -26,7 +27,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 # ---------- locked config ----------
 W, H = 1080, 1920
-DUR = 20.0
+DUR = 12.0   # default; render() sets a per-riddle duration (see _duration)
 
 FD = "/usr/share/fonts/truetype/dejavu"
 def _font(name, size): return ImageFont.truetype(os.path.join(FD, name), size)
@@ -78,8 +79,55 @@ TIPS = ["GUESS BEFORE THE TIMER", "THINK YOU KNOW? PROVE IT",
         "COMMENT YOUR GUESS", "FIRST TO GUESS WINS",
         "CAN YOU CRACK IT? COMMENT", "DROP YOUR GUESS BELOW"]
 
+# Rotating COMMENT PROMPTS (riddle-only format). Each is (headline, subline).
+# Rules: honest (no fake stats like "99% fail"), low-stakes, one clear action,
+# readable for an older audience. Picked deterministically per video by seed.
+# NOTE "RIGHT ANSWERS GET A HEART" is a promise: heart correct guesses in Studio.
+PROMPTS = [
+    ("ONE WORD. GO.",              "Type your answer before you scroll"),
+    ("DON'T SCROLL YET",           "Drop your guess first"),
+    ("FIRST GUESS = FINAL ANSWER", "Comment it. No take-backs."),
+    ("NO PEEKING AT THE COMMENTS", "Guess first, then check"),
+    ("WRONG ANSWERS ONLY",         "Make us laugh in the comments"),
+    ("TAG SOMEONE WHO'D GET THIS", "...or someone who never would"),
+    ("RIGHT ANSWERS GET A \u2665", "Lock in your guess below"),
+    ("EASY OR IMPOSSIBLE?",        "Guess it, then rate it"),
+    ("GOT IT? PROVE IT.",          "Answer in the comments"),
+    ("GUESS IN 3 WORDS OR LESS",   "Short answers only"),
+    ("TOO EASY?",                  "Then answer it below"),
+    ("YOUR FINAL ANSWER IS...?",   "Lock it in below"),
+    ("STUMPED? SAY SO.",           "Or show off your answer"),
+    ("BE THE FIRST TO CRACK IT",   "Comment your guess now"),
+    ("WHAT WAS YOUR FIRST THOUGHT?", "Type it before you change your mind"),
+    ("CHALLENGE A FRIEND",         "Send this to someone smart"),
+    ("GUESS NOW, CHECK LATER",     "Answer's in the pinned comment"),
+    ("NAILED IT OR NO IDEA?",      "Tell us below"),
+    ("ONE CHANCE. ONE GUESS.",     "Make it count"),
+    ("THINK YOU'VE GOT IT?",       "Drop it before anyone else"),
+]
+
+def draw_prompt(d, prompt, y, gold, cream, alpha=255):
+    """Two-line comment prompt centred at x. Headline in gold, subline in cream."""
+    head, sub = prompt
+    MAXW = W - 2 * 100                       # stay clear of the frame/border
+    hs = 44
+    while hs > 30 and spaced_w(d, head, SANS_B(hs), 5) > MAXW:
+        hs -= 2                              # auto-shrink long headlines
+    hf = SANS_B(hs); sf = SANS(34)
+    spaced(d, head, hf, W / 2 - spaced_w(d, head, hf, 5) / 2, y,
+           (gold[0], gold[1], gold[2], alpha), 5)
+    sw = d.textlength(sub, font=sf)
+    d.text((W / 2 - sw / 2, y + 70), sub, font=sf,
+           fill=(cream[0], cream[1], cream[2], int(alpha * 0.85)))
+
 def _h(seed, salt):
     return int(hashlib.sha256(f"{seed}:{salt}".encode()).hexdigest(), 16)
+
+def _duration(riddle):
+    """Riddle-only format: just long enough to read, plus a beat to think.
+    ~0.35s per word + 5s, clamped to 10-16s."""
+    words = len(str(riddle).split())
+    return float(max(10, min(16, round(5 + 0.35 * words))))
 
 def build_theme(seed, kind="adult"):
     """Deterministic variant. Palette rotates WEEKLY (every 7 seeds);
@@ -95,6 +143,7 @@ def build_theme(seed, kind="adult"):
         "kicker":   KICKERS[_h(seed, "ki") % len(KICKERS)],
         "hook":     HOOKS[_h(seed, "hk") % len(HOOKS)],
         "tip":      TIPS[_h(seed, "tip") % len(TIPS)],
+        "prompt":   PROMPTS[_h(seed, "pr") % len(PROMPTS)],
         "q_cy":     520 + (_h(seed, "qy") % 90),
         "week":     week,
     }
@@ -179,11 +228,14 @@ def base_bg(theme):
     return img
 
 # ---------- render ----------
-def render(riddle, answer, seed, out_path, kind="adult", fps=30):
+def render(riddle, answer, seed, out_path, kind="adult", fps=30, still_secs=None):
     theme = build_theme(seed, kind); pal = theme["palette"]
     TOP, BOT, GOLD = pal["top"], pal["bot"], pal["accent"]
     CREAM, DIM = pal["cream"], pal["dim"]
-    nframes = int(fps * DUR)
+    riddle_txt = re.sub(r'\s*what am i\s*\??\s*$', '', str(riddle), flags=re.I).strip()
+    DURV = _duration(riddle_txt)
+    nframes = int(fps * DURV)
+    OUT0 = DURV - 1.0   # seamless-loop fade starts 1s before the end
 
     riddle = re.sub(r'\s*what am i\s*\??\s*$', '', str(riddle), flags=re.I).strip()
     framedir = tempfile.mkdtemp(prefix=f"riddle_frames_{seed}_")
@@ -226,7 +278,7 @@ def render(riddle, answer, seed, out_path, kind="adult", fps=30):
         # answer card) back out so the last frame matches frame 0 (bg + kicker
         # only, hook still at alpha 0). The YouTube auto-loop then has no visible
         # cut, so viewers fall back into the hook instead of swiping at reveal.
-        outro = 1.0 - smooth((t - 19.0) / 1.0) if t >= 19.0 else 1.0
+        outro = 1.0 - smooth((t - OUT0) / 1.0) if t >= OUT0 else 1.0
         kf = SANS_B(34); kick = theme["kicker"]; kw = spaced_w(d, kick, kf, 10)
         # Safe-area: keep the badge below the platform top-nav band (~12% on
         # IG/Shorts). Sits at ~13-17% so Reels/Friends tabs don't cover it.
@@ -254,76 +306,41 @@ def render(riddle, answer, seed, out_path, kind="adult", fps=30):
         spaced(d, BRAND, bf, (W - spaced_w(d, BRAND, bf, 8)) / 2, 356,
                (GOLD[0], GOLD[1], GOLD[2], 255), 8)
 
-        cx, cy, R = W // 2, 1230, 150
-        if 7.0 <= t < 17.0:
-            remain = 17.0 - t; secs = int(math.ceil(remain)); frac = remain / 10.0
-            if theme["ring"] == "ticks":
-                for k in range(60):
-                    ang = math.radians(k * 6 - 90); big = (k % 5 == 0)
-                    r0 = R - (26 if big else 14); r1 = R
-                    lit = (k / 60.0) <= frac
-                    col = (GOLD[0], GOLD[1], GOLD[2], 255) if lit else (255, 255, 255, 40)
-                    d.line([(cx + r0 * math.cos(ang), cy + r0 * math.sin(ang)),
-                            (cx + r1 * math.cos(ang), cy + r1 * math.sin(ang))],
-                           fill=col, width=6 if big else 3)
-            else:
-                d.ellipse([cx - R, cy - R, cx + R, cy + R], outline=(255, 255, 255, 45), width=14)
-                d.arc([cx - R, cy - R, cx + R, cy + R], -90, -90 + 360 * frac,
-                      fill=(GOLD[0], GOLD[1], GOLD[2], 255), width=14)
-            nf = SERIF_B(150); ns = str(secs); bb = d.textbbox((0, 0), ns, font=nf)
-            d.text((cx - (bb[2] - bb[0]) / 2 - bb[0], cy - (bb[3] - bb[1]) / 2 - bb[1]),
-                   ns, font=nf, fill=(CREAM[0], CREAM[1], CREAM[2], 255))
-            tf = SANS_B(30); tip = theme["tip"]
-            spaced(d, tip, tf, cx - spaced_w(d, tip, tf, 6) / 2, cy + R + 90,
-                   (GOLD[0], GOLD[1], GOLD[2], 255), 6)
-            # NOTE: the old "Follow for a new riddle every day" line at y=1740
-            # (~91%) was removed — it fell inside the platform bottom band
-            # (IG username + caption + comment bar) and was always buried. The
-            # follow CTA now lives in the caption/description, not baked in.
-
-        if t >= 17.0:
-            p = smooth((t - 17.0) / 0.45)
-            cardw, cardh = int(W - 200), int(560 * (0.8 + 0.2 * p)); cx0, cy0 = 100, 1010
-            d.rounded_rectangle([cx0, cy0, cx0 + cardw, cy0 + cardh], radius=40,
-                                fill=(248, 245, 238, int(240 * p)),
-                                outline=(GOLD[0], GOLD[1], GOLD[2], int(235 * p)), width=4)
-            lf = SANS_B(34); lab = "THE ANSWER"
-            spaced(d, lab, lf, cx0 + cardw / 2 - spaced_w(d, lab, lf, 8) / 2, cy0 + 60,
-                   (150, 102, 24, int(255 * p)), 8)
-            af = SERIF_B(86); alines = wrap(d, str(answer), af, cardw - 120)
-            draw_block(d, alines, af, cy0 + cardh / 2 + 30, (24, 28, 56, int(255 * p)), lh=1.2)
-
-        # Delightful SUBSCRIBE nudge at the reveal moment (the dopamine peak — the
-        # viewer just got the answer, best possible time to ask). It slides up into
-        # place just under the answer card and POINTS at YouTube's own Subscribe
-        # button (a play glyph + "SUBSCRIBE"). It is NOT a tappable element: Shorts
-        # video frames aren't interactive and have no cards/end-screens, so the real
-        # one-tap subscribe is (a) YouTube's native button in the player and (b) the
-        # ?sub_confirmation=1 link in the description / pinned comment. The final
-        # second loop-blend (t>=19) dissolves this pill toward frame 0 (which has no
-        # pill), so it fades out naturally and the seamless loop stays intact.
-        if t >= 17.4:
-            slide = (1.0 - smooth(min((t - 17.4) / 0.4, 1.0))) * 64
-            py0 = 1582 + slide; ph = 86
-            lab = "SUBSCRIBE  \u00b7  DAILY RIDDLE"; sfont = SANS_B(34)
-            lw = spaced_w(d, lab, sfont, 4); tri_w = 34; gap = 24
-            pill_w = tri_w + gap + lw + 96; px0 = (W - pill_w) / 2
-            d.rounded_rectangle([px0, py0, px0 + pill_w, py0 + ph], radius=43,
-                                fill=(GOLD[0], GOLD[1], GOLD[2], 255))
-            tx = px0 + 46; tcy = py0 + ph / 2
-            d.polygon([(tx, tcy - 19), (tx, tcy + 19), (tx + tri_w, tcy)],
-                      fill=(TOP[0], TOP[1], TOP[2]))
-            spaced(d, lab, sfont, tx + tri_w + gap, py0 + ph / 2 - 20,
-                   (TOP[0], TOP[1], TOP[2]), 4)
+        # Riddle-only format: no countdown, no answer, no music. One quiet prompt
+        # inviting a guess, fading in after a beat so the riddle leads.
+        if t >= 2.0:
+            ta = int(255 * smooth((t - 2.0) / 0.6))
+            draw_prompt(d, theme["prompt"], 1200, GOLD, CREAM, ta)
 
         # Rec 2 (seamless loop): PIL ignores per-fill alpha on this draw surface,
         # so fade-out must be done by pixel blending whole frames. In the final
         # second, cross-dissolve toward a cached copy of frame 0 (the hook frame)
         # so the last frame == the first frame. YouTube's auto-loop cut is then
         # invisible and the dissolve re-presents the hook to pull viewers back in.
-        if t >= 19.0 and HOLD["f0"] is not None:
+        if t >= OUT0 and HOLD["f0"] is not None:
             img = Image.blend(img, HOLD["f0"], 1.0 - outro)
         return img
+
+    # STILL MODE (default): one finished frame (riddle + prompt fully shown).
+    #  - out_path ending .png/.jpg -> save the image only.
+    #  - otherwise -> wrap that image in a short SILENT still video, because
+    #    YouTube Shorts only accept video files (an image can't be a Short).
+    #    Length: still_secs, or env RIDDLE_STILL_SECS, default 7s.
+    if os.environ.get("RIDDLE_ANIMATED") != "1":
+        poster = frame(int(fps * 3.0)).convert("RGB")
+        shutil.rmtree(framedir, ignore_errors=True)
+        d = os.path.dirname(out_path)
+        if d: os.makedirs(d, exist_ok=True)
+        if out_path.lower().endswith((".png", ".jpg", ".jpeg")):
+            poster.save(out_path); return out_path
+        secs = float(still_secs or os.environ.get("RIDDLE_STILL_SECS", 7))
+        png = os.path.splitext(out_path)[0] + "_poster.png"
+        poster.save(png)
+        subprocess.run(["ffmpeg", "-y", "-loop", "1", "-framerate", str(fps), "-i", png,
+                        "-t", f"{secs}", "-c:v", "libx264", "-pix_fmt", "yuv420p",
+                        "-r", str(fps), "-movflags", "+faststart", out_path],
+                       check=True, capture_output=True)
+        return out_path
 
     HOLD["f0"] = frame(0)  # cache frame 0 (hook frame) as the loop target
 
@@ -348,7 +365,8 @@ if __name__ == "__main__":
         r, a = "I have keys but open no locks. I have space but no room. What am I?", "A keyboard"
     th = build_theme(seed)
     print(f"seed {seed}: palette={th['palette']['name']} bg={th['bg_style']} "
-          f"accent={th['accent']} wm={th['wm_pos']} ring={th['ring']} kicker={th['kicker']!r}")
+          f"accent={th['accent']} wm={th['wm_pos']} ring={th['ring']} kicker={th['kicker']!r} "
+          f"dur={_duration(r)}s prompt={th['prompt'][0]!r}")
     out = render(r, a, seed, os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                           "Videos", f"VARTEST_{seed}.mp4"))
     print("SAVED:", out)
