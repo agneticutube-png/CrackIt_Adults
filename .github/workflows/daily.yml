@@ -52,7 +52,7 @@ jobs:
       - name: Build + upload riddles (default 3 per run)
         env:
           YT_PRIVACY: private           # change to "public" only after audit passes
-          VIDEOS_PER_RUN: "3"           # how many videos to produce this run
+          VIDEOS_PER_RUN: "1"           # how many videos to produce this run
           IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
           FB_PAGE_ACCESS_TOKEN: ${{ secrets.FB_PAGE_ACCESS_TOKEN }}
         run: |
