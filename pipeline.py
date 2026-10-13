@@ -133,4 +133,4 @@ if __name__ == "__main__":
         print(json.dumps({k: v for k, v in (nxt or {}).items() if k != "src"},
                          indent=2, ensure_ascii=False) if nxt else "BANK EXHAUSTED")
     else:
-        build_next(do_audio="--no-audio" not in sys.argv)
+        build_next(do_audio=os.environ.get("RIDDLE_AUDIO") == "1" and "--no-audio" not in sys.argv)
